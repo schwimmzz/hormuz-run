@@ -1,0 +1,11 @@
+{
+    "name": "Hormuz Run",
+    "short_name": "HormuzRun",
+    "description": "Navigate a tanker through the Strait of Hormuz. Pick your flag. Dodge mines. Try not to get sunk.",
+    "start_url": "./",
+    "display": "fullscreen",
+    "orientation": "landscape",
+    "background_color": "#000000",
+    "theme_color": "#000000",
+    "icons": []
+}

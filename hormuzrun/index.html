@@ -2,12 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#000000">
+<link rel="manifest" href="manifest.json">
 <title>HORMUZ RUN</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-html,body{width:100%;height:100%;overflow:hidden;background:#000}
-canvas{display:block;cursor:crosshair;image-rendering:auto}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;position:fixed;top:0;left:0}
+canvas{display:block;cursor:crosshair;image-rendering:auto;position:fixed;top:0;left:0}
 </style>
 </head>
 <body>
@@ -353,11 +358,16 @@ window.addEventListener('keydown', e => {
 });
 window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 window.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
-window.addEventListener('click', e => { mouseClick = true; mouseX = e.clientX; mouseY = e.clientY; });
+window.addEventListener('click', e => {
+    mouseClick = true; mouseX = e.clientX; mouseY = e.clientY;
+    if (typeof tryFullscreen === 'function' && game && game.screen === 'title') tryFullscreen();
+});
 canvas.addEventListener('touchstart', e => {
     e.preventDefault(); const t=e.touches[0];
     mouseX=t.clientX; mouseY=t.clientY; mouseClick=true;
     game.touchActive=true; game.touchX=t.clientX; game.touchY=t.clientY;
+    // Fullscreen must be triggered from a real user gesture
+    if (typeof tryFullscreen === 'function' && game && game.screen === 'title') tryFullscreen();
 }, {passive:false});
 canvas.addEventListener('touchmove', e => {
     e.preventDefault(); const t=e.touches[0];
@@ -695,16 +705,26 @@ function resolveChoice(choiceIdx){
 //  UPDATE FUNCTIONS
 // ============================================================
 
+// Fullscreen is requested directly from event handlers below, not here.
+// See the touchstart/click listeners.
 function tryFullscreen() {
-    if (document.documentElement.requestFullscreen) {
-        document.documentElement.requestFullscreen().catch(err => console.log(err));
+    const el = document.documentElement;
+    const rfs = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+    if (rfs) {
+        rfs.call(el).catch(()=>{});
     }
+    // Also try to lock orientation to landscape
+    try {
+        if (screen.orientation && screen.orientation.lock) {
+            screen.orientation.lock('landscape').catch(()=>{});
+        }
+    } catch(e) {}
 }
 
 function updateTitle(dt){
     game.titlePulse += dt;
     if(keys['enter']||keys[' ']||mouseClick){
-        tryFullscreen();
+        // fullscreen is triggered from the event handler, not here
         game.screen = 'flagSelect';
         keys['enter']=false; keys[' ']=false; mouseClick=false;
     }

@@ -129,6 +129,282 @@ canvas{display:block;cursor:crosshair;image-rendering:auto;position:fixed;top:0;
 //  HORMUZ RUN  —  Navigate. Survive. Profit.
 // ============================================================
 
+// ============================================================
+//  SOUND ENGINE (Web Audio API + HTML5 Audio for music)
+// ============================================================
+
+const SFX = {
+    ctx: null,
+    musicEl: null,
+    musicVol: 0.35,
+    masterVol: 0.6,
+    muted: false,
+
+    init() {
+        if (this.ctx) return;
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        this.master = this.ctx.createGain();
+        this.master.gain.value = this.masterVol;
+        this.master.connect(this.ctx.destination);
+
+        // Theme music via HTML5 Audio
+        this.musicEl = new Audio('theme.mp3');
+        this.musicEl.loop = true;
+        this.musicEl.volume = this.musicVol;
+    },
+
+    resume() {
+        if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+    },
+
+    // ---- Music controls ----
+    playMusic() {
+        if (!this.musicEl) return;
+        this.musicEl.volume = this.musicVol;
+        this.musicEl.play().catch(()=>{});
+    },
+    stopMusic() {
+        if (!this.musicEl) return;
+        this.musicEl.pause();
+        this.musicEl.currentTime = 0;
+    },
+    fadeMusic(vol, dur) {
+        if (!this.musicEl) return;
+        const start = this.musicEl.volume;
+        const diff = vol - start;
+        const steps = 20;
+        let i = 0;
+        const iv = setInterval(() => {
+            i++;
+            this.musicEl.volume = Math.max(0, Math.min(1, start + diff * (i/steps)));
+            if (i >= steps) clearInterval(iv);
+        }, dur/steps);
+    },
+
+    // ---- Utility: create noise buffer ----
+    _noiseBuf: null,
+    noise(duration) {
+        if (!this._noiseBuf) {
+            const sr = this.ctx.sampleRate;
+            this._noiseBuf = this.ctx.createBuffer(1, sr*2, sr);
+            const d = this._noiseBuf.getChannelData(0);
+            for (let i=0;i<d.length;i++) d[i] = Math.random()*2-1;
+        }
+        const src = this.ctx.createBufferSource();
+        src.buffer = this._noiseBuf;
+        return src;
+    },
+
+    // ---- SFX generators ----
+    ping() { // sonar ping for title screen
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1200, t);
+        osc.frequency.exponentialRampToValueAtTime(800, t+0.15);
+        g.gain.setValueAtTime(0.15, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t+0.4);
+        osc.connect(g); g.connect(this.master);
+        osc.start(t); osc.stop(t+0.4);
+    },
+
+    blip() { // UI navigation
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.value = 660;
+        g.gain.setValueAtTime(0.08, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t+0.06);
+        osc.connect(g); g.connect(this.master);
+        osc.start(t); osc.stop(t+0.06);
+    },
+
+    explosion() { // mine hit
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime;
+        const n = this.noise(0.6);
+        const g = this.ctx.createGain();
+        const f = this.ctx.createBiquadFilter();
+        f.type = 'lowpass';
+        f.frequency.setValueAtTime(800, t);
+        f.frequency.exponentialRampToValueAtTime(100, t+0.5);
+        g.gain.setValueAtTime(0.7, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t+0.5);
+        n.connect(f); f.connect(g); g.connect(this.master);
+        n.start(t); n.stop(t+0.6);
+        // Sub bass thump
+        const osc = this.ctx.createOscillator();
+        const g2 = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(80, t);
+        osc.frequency.exponentialRampToValueAtTime(20, t+0.3);
+        g2.gain.setValueAtTime(0.5, t);
+        g2.gain.exponentialRampToValueAtTime(0.001, t+0.35);
+        osc.connect(g2); g2.connect(this.master);
+        osc.start(t); osc.stop(t+0.35);
+    },
+
+    droneHit() { // drone impact — sharper than mine
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime;
+        const n = this.noise(0.3);
+        const g = this.ctx.createGain();
+        const f = this.ctx.createBiquadFilter();
+        f.type = 'bandpass';
+        f.frequency.value = 2000;
+        f.Q.value = 2;
+        g.gain.setValueAtTime(0.4, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t+0.25);
+        n.connect(f); f.connect(g); g.connect(this.master);
+        n.start(t); n.stop(t+0.3);
+    },
+
+    scrape() { // land collision
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime;
+        const n = this.noise(0.2);
+        const g = this.ctx.createGain();
+        const f = this.ctx.createBiquadFilter();
+        f.type = 'highpass';
+        f.frequency.value = 600;
+        g.gain.setValueAtTime(0.15, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t+0.15);
+        n.connect(f); f.connect(g); g.connect(this.master);
+        n.start(t); n.stop(t+0.2);
+    },
+
+    radioStatic() { // encounter opens
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime;
+        const n = this.noise(0.8);
+        const g = this.ctx.createGain();
+        const f = this.ctx.createBiquadFilter();
+        f.type = 'bandpass';
+        f.frequency.value = 1500;
+        f.Q.value = 5;
+        g.gain.setValueAtTime(0.2, t);
+        g.gain.setValueAtTime(0.12, t+0.1);
+        g.gain.exponentialRampToValueAtTime(0.001, t+0.7);
+        n.connect(f); f.connect(g); g.connect(this.master);
+        n.start(t); n.stop(t+0.8);
+    },
+
+    tollPay() { // money leaving
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(880, t);
+        osc.frequency.setValueAtTime(660, t+0.08);
+        osc.frequency.setValueAtTime(440, t+0.16);
+        g.gain.setValueAtTime(0.1, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t+0.3);
+        osc.connect(g); g.connect(this.master);
+        osc.start(t); osc.stop(t+0.3);
+    },
+
+    death() { // ship destroyed
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime;
+        // Long low rumble
+        const n = this.noise(2);
+        const g = this.ctx.createGain();
+        const f = this.ctx.createBiquadFilter();
+        f.type = 'lowpass';
+        f.frequency.setValueAtTime(400, t);
+        f.frequency.exponentialRampToValueAtTime(30, t+1.8);
+        g.gain.setValueAtTime(0.6, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t+2.0);
+        n.connect(f); f.connect(g); g.connect(this.master);
+        n.start(t); n.stop(t+2.0);
+        // Descending tone
+        const osc = this.ctx.createOscillator();
+        const g2 = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(200, t);
+        osc.frequency.exponentialRampToValueAtTime(25, t+1.5);
+        g2.gain.setValueAtTime(0.3, t);
+        g2.gain.exponentialRampToValueAtTime(0.001, t+1.5);
+        osc.connect(g2); g2.connect(this.master);
+        osc.start(t); osc.stop(t+1.5);
+        // Fade music
+        this.fadeMusic(0, 1500);
+    },
+
+    success() { // transit complete
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime;
+        const notes = [523, 659, 784, 1047];
+        notes.forEach((freq, i) => {
+            const osc = this.ctx.createOscillator();
+            const g = this.ctx.createGain();
+            osc.type = 'square';
+            osc.frequency.value = freq;
+            g.gain.setValueAtTime(0, t+i*0.12);
+            g.gain.linearRampToValueAtTime(0.1, t+i*0.12+0.02);
+            g.gain.exponentialRampToValueAtTime(0.001, t+i*0.12+0.3);
+            osc.connect(g); g.connect(this.master);
+            osc.start(t+i*0.12); osc.stop(t+i*0.12+0.3);
+        });
+    },
+
+    _warnOsc: null,
+    warnStart() { // low hull warning siren
+        if (!this.ctx || this._warnOsc) return;
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = 440;
+        g.gain.value = 0.06;
+        const lfo = this.ctx.createOscillator();
+        lfo.frequency.value = 3;
+        const lfoG = this.ctx.createGain();
+        lfoG.gain.value = 120;
+        lfo.connect(lfoG); lfoG.connect(osc.frequency);
+        osc.connect(g); g.connect(this.master);
+        osc.start(); lfo.start();
+        this._warnOsc = { osc, lfo, gain: g };
+    },
+    warnStop() {
+        if (!this._warnOsc) return;
+        this._warnOsc.gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime+0.1);
+        const w = this._warnOsc;
+        setTimeout(() => { w.osc.stop(); w.lfo.stop(); }, 150);
+        this._warnOsc = null;
+    },
+
+    // Continuous engine hum
+    _engineOsc: null,
+    engineStart() {
+        if (!this.ctx || this._engineOsc) return;
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.value = 42;
+        g.gain.value = 0.04;
+        osc.connect(g); g.connect(this.master);
+        osc.start();
+        this._engineOsc = { osc, gain: g };
+    },
+    engineUpdate(speed) {
+        if (!this._engineOsc) return;
+        this._engineOsc.osc.frequency.value = 35 + speed * 0.12;
+        this._engineOsc.gain.gain.value = 0.03 + speed * 0.0003;
+    },
+    engineStop() {
+        if (!this._engineOsc) return;
+        this._engineOsc.gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime+0.2);
+        const e = this._engineOsc;
+        setTimeout(() => { e.osc.stop(); }, 250);
+        this._engineOsc = null;
+    },
+};
+
 let cw = 0, ch = 0, dpr = 1;
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -750,6 +1026,8 @@ function renderParticles(){
 
 // ---- Start Transit ----
 function startTransit(){
+    SFX.engineStart();
+    SFX.blip();
     const f = FLAGS[game.flagIdx];
     game.flag = f;
     game.gameTime = 0;
@@ -775,6 +1053,9 @@ function startTransit(){
 
 // ---- Game Over ----
 function triggerGameOver(survived){
+    SFX.engineStop();
+    SFX.warnStop();
+    if (survived) SFX.success(); else SFX.death();
     game.screen = 'gameOver';
     game.survived = survived;
     game.transitPct = clamp((player.x-300)/(MAP_W-600),0,1);
@@ -850,12 +1131,14 @@ function resolveChoice(choiceIdx){
 
     player.tollsPaid += cost;
     if(dmg>0){
+        SFX.droneHit();
         player.hp = Math.max(0, player.hp-dmg);
         game.damageFlash = 1;
         game.screenShake = 3;
         spawnParticles(player.x, player.y, 15, '#ff4400', 80, 3);
     }
 
+    if (cost>0) SFX.tollPay();
     const costStr = cost>0 ? ' (-'+fmtMoney(cost)+')' : '';
     const dmgStr = dmg>0 ? ' ['+dmg+' HULL DAMAGE]' : '';
     game.encounter.result = text + costStr + dmgStr;
@@ -883,10 +1166,14 @@ function tryFullscreen() {
     } catch(e) {}
 }
 
+let desktopAudioInit = false;
 function updateTitle(dt){
     game.titlePulse += dt;
+    if (game.screen === 'title' && Math.sin(game.titlePulse*3)>0 && Math.sin((game.titlePulse-dt)*3)<=0) { SFX.ping(); }
     if(keys['enter']||keys[' ']||mouseClick){
         // fullscreen is triggered from the event handler, not here
+        if (!desktopAudioInit) { SFX.init(); SFX.resume(); SFX.playMusic(); desktopAudioInit = true; }
+        SFX.blip();
         game.screen = 'flagSelect';
         keys['enter']=false; keys[' ']=false; mouseClick=false;
     }
@@ -894,10 +1181,12 @@ function updateTitle(dt){
 
 function updateFlagSelect(dt){
     if(keys['w']||keys['arrowup']){
+        SFX.blip();
         game.flagIdx = (game.flagIdx-1+FLAGS.length)%FLAGS.length;
         keys['w']=false; keys['arrowup']=false;
     }
     if(keys['s']||keys['arrowdown']){
+        SFX.blip();
         game.flagIdx = (game.flagIdx+1)%FLAGS.length;
         keys['s']=false; keys['arrowdown']=false;
     }
@@ -1007,6 +1296,7 @@ function updateGameplay(dt){
         game.damageFlash = 0.6;
         game.screenShake = 2;
         spawnParticles(player.x, player.y, 6, '#aa8855', 50, 2);
+        SFX.scrape();
         game.landDmgTimer = LAND_DMG_COOLDOWN;
         if(player.hp<=0){ player.alive=false; spawnParticles(player.x,player.y,40,'#ff6600',120,5); setTimeout(()=>triggerGameOver(false),1500); return; }
     }
@@ -1033,6 +1323,7 @@ function updateGameplay(dt){
             game.damageFlash = 1;
             game.screenShake = o.type==='mine'?4:2;
             spawnParticles(o.x, o.y, o.type==='mine'?25:12, o.type==='mine'?'#ff4400':'#aa8855', 100, 3);
+            if (o.type==='mine') SFX.explosion(); else SFX.scrape();
             if(player.hp<=0){ player.alive=false; spawnParticles(player.x,player.y,40,'#ff6600',120,5); setTimeout(()=>triggerGameOver(false),1500); return; }
         }
     }
@@ -1055,6 +1346,7 @@ function updateGameplay(dt){
                 game.damageFlash = 1;
                 game.screenShake = 3;
                 spawnParticles(dr.x, dr.y, 18, '#ff2200', 90, 2.5);
+                SFX.droneHit();
                 if(player.hp<=0){ player.alive=false; spawnParticles(player.x,player.y,40,'#ff6600',120,5); setTimeout(()=>triggerGameOver(false),1500); return; }
             }
         }
@@ -1071,6 +1363,9 @@ function updateGameplay(dt){
             game.encounter.result = null;
             game.encounter.timer = 0;
             game.encounter.choiceIdx = -1;
+            SFX.engineStop();
+            SFX.fadeMusic(SFX.musicVol*0.2, 500);
+            SFX.radioStatic();
         }
     }
 
@@ -1098,6 +1393,8 @@ function updateGameplay(dt){
 
     // Particles & effects
     updateParticles(dt);
+    SFX.engineUpdate(player.vx);
+    if (player.hp < 30) SFX.warnStart(); else SFX.warnStop();
     game.damageFlash *= 0.93;
     game.screenShake *= 0.82;
 }
@@ -1135,6 +1432,8 @@ function updateEncounter(dt){
     if(enc.phase==='result'){
         if(enc.timer>1.5 && (keys['enter']||keys[' ']||mouseClick)){
             enc.active = false;
+            SFX.fadeMusic(SFX.musicVol, 800);
+            if (player.alive) SFX.engineStart();
             game.screen = 'gameplay';
             keys['enter']=false; keys[' ']=false; mouseClick=false;
             if(player.hp<=0){ player.alive=false; setTimeout(()=>triggerGameOver(false),500); }
@@ -2089,6 +2388,9 @@ function updateGateUI() {
 
 // Button click → fullscreen + start game
 fsBtn.addEventListener('click', function() {
+    SFX.init();
+    SFX.resume();
+    SFX.playMusic();
     // Request fullscreen from this genuine user gesture
     const el = document.documentElement;
     const rfs = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;

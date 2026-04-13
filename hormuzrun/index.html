@@ -137,6 +137,7 @@ canvas{display:block;cursor:crosshair;image-rendering:auto;position:fixed;top:0;
 const SFX = {
     ctx: null,
     musicEl: document.getElementById('bg-music'),
+    musicGain: null,
     musicVol: 0.35,
     masterVol: 0.6,
     muted: false,
@@ -149,11 +150,13 @@ const SFX = {
         this.master.gain.value = this.masterVol;
         this.master.connect(this.ctx.destination);
 
-        // Theme music via HTML5 Audio
+        // Route music through Web Audio API so ctx.resume() covers everything.
+        // This avoids the HTML5 Audio vs AudioContext split that breaks on mobile.
+        this.musicGain = this.ctx.createGain();
+        this.musicGain.gain.value = this.musicVol;
+        this.musicGain.connect(this.ctx.destination);
+        this.ctx.createMediaElementSource(this.musicEl).connect(this.musicGain);
         this.musicEl.loop = true;
-        this.musicEl.volume = this.musicVol;
-        // Mobile browsers ignore preload="auto" — force buffering within user gesture
-        this.musicEl.load();
     },
 
     resume() {
@@ -164,19 +167,8 @@ const SFX = {
     playMusic() {
         if (!this.musicEl) return;
         this._wantMusic = true;
-        this.musicEl.volume = this.musicVol;
         if (this.musicEl.paused) {
-            const p = this.musicEl.play();
-            if (p && p.catch) {
-                p.catch(() => {
-                    // Audio not buffered yet — retry once it has enough data
-                    this.musicEl.addEventListener('canplay', () => {
-                        if (this._wantMusic && this.musicEl.paused) {
-                            this.musicEl.play().catch(() => {});
-                        }
-                    }, { once: true });
-                });
-            }
+            this.musicEl.play().catch(() => {});
         }
     },
     stopMusic() {
@@ -186,14 +178,15 @@ const SFX = {
         this.musicEl.currentTime = 0;
     },
     fadeMusic(vol, dur) {
-        if (!this.musicEl) return;
-        const start = this.musicEl.volume;
+        if (!this.musicGain) return;
+        const node = this.musicGain.gain;
+        const start = node.value;
         const diff = vol - start;
         const steps = 20;
         let i = 0;
         const iv = setInterval(() => {
             i++;
-            this.musicEl.volume = Math.max(0, Math.min(1, start + diff * (i/steps)));
+            node.value = Math.max(0, Math.min(1, start + diff * (i/steps)));
             if (i >= steps) clearInterval(iv);
         }, dur/steps);
     },
@@ -1562,7 +1555,7 @@ function renderFlagSelect(){
     ctx.strokeRect(px,py,panelW,panelH);
 
     const headSz = Math.max(16, panelW*0.05);
-    drawText('SELECT YOUR FLAG', px+panelW/2, py+pad, {size:headSz, align:'center', color:C_GREEN, bold:true, glow:8});
+    drawText('CHOOSE YOUR NATION', px+panelW/2, py+pad, {size:headSz, align:'center', color:C_GREEN, bold:true, glow:8});
     ctx.strokeStyle='#1a5533'; ctx.lineWidth=1;
     const hdrBot = py+pad+headSz+10;
     ctx.beginPath(); ctx.moveTo(px+pad,hdrBot); ctx.lineTo(px+panelW-pad,hdrBot); ctx.stroke();

@@ -135,7 +135,7 @@ canvas{display:block;cursor:crosshair;image-rendering:auto;position:fixed;top:0;
 
 const SFX = {
     ctx: null,
-    musicEl: null,
+    musicEl: new Audio('theme.mp3'),
     musicVol: 0.35,
     masterVol: 0.6,
     muted: false,
@@ -148,7 +148,6 @@ const SFX = {
         this.master.connect(this.ctx.destination);
 
         // Theme music via HTML5 Audio
-        this.musicEl = new Audio('theme.mp3');
         this.musicEl.loop = true;
         this.musicEl.volume = this.musicVol;
     },
@@ -161,7 +160,7 @@ const SFX = {
     playMusic() {
         if (!this.musicEl) return;
         this.musicEl.volume = this.musicVol;
-        this.musicEl.play().catch(()=>{});
+        this.musicEl.play().catch(e => console.log('Music play error:', e));
     },
     stopMusic() {
         if (!this.musicEl) return;
@@ -2037,7 +2036,7 @@ function renderHUD(){
     drawText(String(mins).padStart(2,'0')+':'+String(secs).padStart(2,'0'), cw-pad, ch-(mob?10:20), {size:mob?9:11, color:'#557755', align:'right'});
 
     // ---- Virtual D-Pad (mobile only) ----
-    if(mob && dpadR > 0){
+    if(isMobileDevice() && dpadR > 0){
         const cx = dpadCx, cy = dpadCy, r = dpadR, ir = dpadInnerR;
         const dp = game.dpad;
 

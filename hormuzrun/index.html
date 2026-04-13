@@ -18,16 +18,28 @@ canvas{display:block;cursor:crosshair;image-rendering:auto}
 //  HORMUZ RUN  —  Navigate. Survive. Profit.
 // ============================================================
 
+let cw = 0, ch = 0, dpr = 1;
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ---- Resize ----
 let scale = 1, viewW = 0;
 function resize() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    scale = canvas.height / WORLD_H;
-    viewW = canvas.width / scale;
+    cw = window.innerWidth;
+    ch = window.innerHeight;
+    dpr = window.devicePixelRatio || 1;
+    canvas.style.width = cw + 'px';
+    canvas.style.height = ch + 'px';
+    canvas.width = Math.round(cw * dpr);
+    canvas.height = Math.round(ch * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    if (cw < ch && cw < 800) {
+        scale = cw / 1000;
+    } else {
+        scale = ch / WORLD_H;
+    }
+    viewW = cw / scale;
 }
 
 // ---- Constants ----
@@ -554,7 +566,7 @@ function updateParticles(dt){
 function renderParticles(){
     for(const p of particles){
         const sx=wToSx(p.x), sy=wToSy(p.y);
-        if(sx<-20||sx>canvas.width+20) continue;
+        if(sx<-20||sx>cw+20) continue;
         ctx.globalAlpha = p.life*0.8;
         ctx.fillStyle = p.color;
         ctx.beginPath();
@@ -706,15 +718,17 @@ function updateFlagSelect(dt){
     }
     // Mouse / tap on flag row
     if(mouseClick){
-        const mob = canvas.width<600;
-        const panelW = mob ? canvas.width*0.94 : Math.min(720, canvas.width*0.9);
-        const panelH = mob ? canvas.height*0.94 : Math.min(700, canvas.height*0.92);
-        const px = (canvas.width-panelW)/2;
-        const py = (canvas.height-panelH)/2;
+        const mob = cw<600;
+        const panelW = mob ? cw*0.94 : Math.min(720, cw*0.9);
+        const panelH = mob ? ch*0.94 : Math.min(700, ch*0.92);
+        const px = (cw-panelW)/2;
+        const py = (ch-panelH)/2;
         const pad = mob?10:20;
         const headSz = mob?16:22;
         const hdrBot = py+pad+headSz+10;
-        const rowH = mob?28:35;
+        const panelH = mob ? ch*0.94 : Math.min(700, ch*0.92);
+        const panelW = mob ? cw*0.94 : Math.min(720, cw*0.9);
+        const rowH = mob ? Math.max(28, panelH*0.065) : Math.max(35, panelH*0.065);
         const listTop = hdrBot+(mob?6:10);
         const listW = mob ? panelW : panelW*0.5;
         for(let i=0;i<FLAGS.length;i++){
@@ -754,8 +768,8 @@ function updateGameplay(dt){
     if(keys['s']||keys['arrowdown']) vi = 1;
     // Touch steering
     if(game.touchActive){
-        vi = clamp((game.touchY - canvas.height*0.5) / (canvas.height*0.25), -1, 1);
-        const dx = (game.touchX - canvas.width*0.5) / (canvas.width*0.25);
+        vi = clamp((game.touchY - ch*0.5) / (ch*0.25), -1, 1);
+        const dx = (game.touchX - cw*0.5) / (cw*0.25);
         if(dx>0.2) targetVX += SPEED_BOOST * Math.min(1,dx);
         if(dx<-0.2) targetVX -= SPEED_BRAKE * Math.min(1,-dx);
     }
@@ -878,11 +892,11 @@ function updateEncounter(dt){
         }
         // Mouse / tap on choices
         if(mouseClick && enc._choiceYs){
-            const mob = canvas.width<600;
+            const mob = cw<600;
             const pad = mob?12:20;
-            const choiceH = mob?28:34;
-            const panelW = mob ? canvas.width*0.94 : Math.min(620, canvas.width*0.82);
-            const px = (canvas.width-panelW)/2;
+            const choiceH = Math.max(28, panelH*0.07);
+            const panelW = mob ? cw*0.94 : Math.min(620, cw*0.82);
+            const px = (cw-panelW)/2;
             for(let i=0;i<5;i++){
                 const cy = enc._choiceYs[i];
                 if(cy && mouseX>px+pad && mouseX<px+panelW-pad && mouseY>cy && mouseY<cy+choiceH){
@@ -910,7 +924,7 @@ function updateGameOver(dt){
         if(keys['f']){ keys['f']=false; game.screen='flagSelect'; }
         // Tap support: left half = retry, right half = change flag
         if(mouseClick){
-            if(mouseX < canvas.width/2) startTransit();
+            if(mouseX < cw/2) startTransit();
             else game.screen='flagSelect';
             mouseClick=false;
         }
@@ -924,11 +938,11 @@ function updateGameOver(dt){
 function renderTitle(){
     // Background
     ctx.fillStyle = C_WATER;
-    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillRect(0,0,cw,ch);
 
     // Radar sweep
-    const cx=canvas.width/2, cy=canvas.height/2;
-    const rr = Math.min(canvas.width, canvas.height)*0.4;
+    const cx=cw/2, cy=ch/2;
+    const rr = Math.min(cw, ch)*0.4;
     const sweepAngle = game.titlePulse*0.5;
     ctx.save();
     ctx.translate(cx, cy);
@@ -961,31 +975,31 @@ function renderTitle(){
     }
 
     // Title
-    drawText('HORMUZ', cx, cy-55, {size:Math.min(72,canvas.width*0.08), align:'center', color:C_GREEN, bold:true, glow:20, baseline:'middle'});
-    drawText('RUN', cx, cy+15, {size:Math.min(72,canvas.width*0.08), align:'center', color:C_GREEN, bold:true, glow:20, baseline:'middle'});
+    drawText('HORMUZ', cx, cy-ch*0.08, {size:Math.min(72,cw*0.1), align:'center', color:C_GREEN, bold:true, glow:20, baseline:'middle'});
+    drawText('RUN', cx, cy+ch*0.03, {size:Math.min(72,cw*0.1), align:'center', color:C_GREEN, bold:true, glow:20, baseline:'middle'});
 
     // Subtitle
-    const mob = canvas.width<600;
+    const mob = cw<600;
     drawText('Navigate. Survive. Profit.', cx, cy+65, {size:mob?12:16, align:'center', color:C_GREEN_DIM, baseline:'middle'});
 
     // Prompt
     if(Math.sin(game.titlePulse*3)>0){
-        drawText(mob?'TAP TO START':'PRESS ENTER', cx, canvas.height-80, {size:mob?15:18, align:'center', color:C_GREEN, glow:6, baseline:'middle'});
+        drawText(mob?'TAP TO START':'PRESS ENTER', cx, ch-80, {size:mob?15:18, align:'center', color:C_GREEN, glow:6, baseline:'middle'});
     }
 
-    drawText('A Strait of Hormuz Transit Simulation', cx, canvas.height-40, {size:mob?9:11, align:'center', color:'#1a5533', baseline:'middle'});
+    drawText('A Strait of Hormuz Transit Simulation', cx, ch-40, {size:mob?9:11, align:'center', color:'#1a5533', baseline:'middle'});
     drawScanlines();
 }
 
 function renderFlagSelect(){
     ctx.fillStyle = '#050d08';
-    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillRect(0,0,cw,ch);
 
-    const mob = canvas.width < 600;
-    const panelW = mob ? canvas.width*0.94 : Math.min(720, canvas.width*0.9);
-    const panelH = mob ? canvas.height*0.94 : Math.min(700, canvas.height*0.92);
-    const px = (canvas.width-panelW)/2;
-    const py = (canvas.height-panelH)/2;
+    const mob = cw < 600;
+    const panelW = mob ? cw*0.94 : Math.min(720, cw*0.9);
+    const panelH = mob ? ch*0.94 : Math.min(700, ch*0.92);
+    const px = (cw-panelW)/2;
+    const py = (ch-panelH)/2;
     const pad = mob ? 10 : 20;
 
     ctx.fillStyle = C_PANEL;
@@ -994,7 +1008,7 @@ function renderFlagSelect(){
     ctx.lineWidth = 2;
     ctx.strokeRect(px,py,panelW,panelH);
 
-    const headSz = mob ? 16 : 22;
+    const headSz = Math.max(16, panelW*0.05);
     drawText('SELECT YOUR FLAG', px+panelW/2, py+pad, {size:headSz, align:'center', color:C_GREEN, bold:true, glow:8});
     ctx.strokeStyle='#1a5533'; ctx.lineWidth=1;
     const hdrBot = py+pad+headSz+10;
@@ -1002,7 +1016,7 @@ function renderFlagSelect(){
 
     if(mob){
         // --- MOBILE: single column ---
-        const rowH = 28, fs = 12;
+        const rowH = Math.max(28, panelH*0.065), fs = Math.max(12, panelW*0.035);
         const listTop = hdrBot+6;
         for(let i=0;i<FLAGS.length;i++){
             const f=FLAGS[i], ry=listTop+i*rowH, sel=i===game.flagIdx;
@@ -1056,21 +1070,21 @@ function renderFlagSelect(){
 
 function renderBriefing(){
     ctx.fillStyle = '#050d08';
-    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillRect(0,0,cw,ch);
 
     const f = game.flag;
-    const mob = canvas.width<600;
-    const panelW = Math.min(550, canvas.width*(mob?0.94:0.85));
-    const px = (canvas.width-panelW)/2;
-    const cy = canvas.height/2;
+    const mob = cw<600;
+    const panelW = Math.min(550, cw*(mob?0.94:0.85));
+    const px = (cw-panelW)/2;
+    const cy = ch/2;
     const fs = mob?11:14;
     const labelOff = mob?95:160;
     const spacing = mob?22:26;
 
     const border = '\u2550'.repeat(Math.floor(panelW/(mob?8:10)));
-    drawText(border, canvas.width/2, cy-140, {size:mob?10:14, align:'center', color:C_PANELBDR});
-    drawText('TRANSIT BRIEFING', canvas.width/2, cy-115, {size:mob?16:22, align:'center', color:C_GREEN, bold:true, glow:10});
-    drawText(border, canvas.width/2, cy-90, {size:mob?10:14, align:'center', color:C_PANELBDR});
+    drawText(border, cw/2, cy-140, {size:mob?10:14, align:'center', color:C_PANELBDR});
+    drawText('TRANSIT BRIEFING', cw/2, cy-115, {size:mob?16:22, align:'center', color:C_GREEN, bold:true, glow:10});
+    drawText(border, cw/2, cy-90, {size:mob?10:14, align:'center', color:C_PANELBDR});
 
     const lines = [
         ['FLAG:', f.code+' '+f.name],
@@ -1094,19 +1108,19 @@ function renderBriefing(){
     ctx.fillRect(barX,yy,barW2*f.threat,barH);
 
     yy+=35;
-    drawText(border, canvas.width/2, yy, {size:mob?10:14, align:'center', color:C_PANELBDR});
+    drawText(border, cw/2, yy, {size:mob?10:14, align:'center', color:C_PANELBDR});
 
     if(Math.sin(game.time*4)>0){
-        drawText(mob?'TAP TO BEGIN':'[ENTER] BEGIN TRANSIT', canvas.width/2, yy+30, {size:mob?13:16, align:'center', color:C_GREEN, glow:6});
+        drawText(mob?'TAP TO BEGIN':'[ENTER] BEGIN TRANSIT', cw/2, yy+30, {size:mob?13:16, align:'center', color:C_GREEN, glow:6});
     }
-    drawText(mob?'Touch to steer | Survive | Deliver':'WASD to steer  |  Survive  |  Deliver cargo', canvas.width/2, yy+60, {size:mob?9:11, align:'center', color:'#336644'});
+    drawText(mob?'Touch to steer | Survive | Deliver':'WASD to steer  |  Survive  |  Deliver cargo', cw/2, yy+60, {size:mob?9:11, align:'center', color:'#336644'});
     drawScanlines();
 }
 
 function renderGameplay(){
     // Water bg
     ctx.fillStyle = C_WATER;
-    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillRect(0,0,cw,ch);
 
     // Grid
     ctx.strokeStyle='rgba(20,60,40,0.12)';
@@ -1115,11 +1129,11 @@ function renderGameplay(){
     const startGX=Math.floor(camera.x/gridSpace)*gridSpace;
     for(let wx=startGX;wx<camera.x+viewW;wx+=gridSpace){
         const sx=wToSx(wx);
-        ctx.beginPath(); ctx.moveTo(sx,0); ctx.lineTo(sx,canvas.height); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(sx,0); ctx.lineTo(sx,ch); ctx.stroke();
     }
     for(let wy=0;wy<WORLD_H;wy+=gridSpace){
         const sy=wToSy(wy);
-        ctx.beginPath(); ctx.moveTo(0,sy); ctx.lineTo(canvas.width,sy); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0,sy); ctx.lineTo(cw,sy); ctx.stroke();
     }
 
     // Coastlines
@@ -1129,7 +1143,7 @@ function renderGameplay(){
     for(const o of obstacles){
         if(o.type!=='wreck') continue;
         const sx=wToSx(o.x), sy=wToSy(o.y);
-        if(sx<-100||sx>canvas.width+100) continue;
+        if(sx<-100||sx>cw+100) continue;
         ctx.save();
         ctx.translate(sx,sy);
         ctx.rotate(o.angle);
@@ -1155,7 +1169,7 @@ function renderGameplay(){
     for(const o of obstacles){
         if(o.type!=='mine'||!o.active) continue;
         const sx=wToSx(o.x), sy=wToSy(o.y);
-        if(sx<-50||sx>canvas.width+50) continue;
+        if(sx<-50||sx>cw+50) continue;
 
         // Visibility cycle: visible ~1.4s out of every 5s, per-mine phase offset
         const cycleT = 5.0;
@@ -1201,7 +1215,7 @@ function renderGameplay(){
     for(const o of obstacles){
         if(o.type!=='debris'||!o.active) continue;
         const sx=wToSx(o.x), sy=wToSy(o.y);
-        if(sx<-60||sx>canvas.width+60) continue;
+        if(sx<-60||sx>cw+60) continue;
         ctx.save();
         ctx.translate(sx,sy);
         ctx.rotate(o.angle+Math.sin(game.time*0.3+o.x*0.01)*0.1);
@@ -1216,7 +1230,7 @@ function renderGameplay(){
     for(const dr of drones){
         if(!dr.active) continue;
         const sx=wToSx(dr.x), sy=wToSy(dr.y);
-        if(sx<-50||sx>canvas.width+50) continue;
+        if(sx<-50||sx>cw+50) continue;
         ctx.save();
         ctx.translate(sx,sy);
         ctx.rotate(Math.PI/2); // pointing down
@@ -1295,7 +1309,7 @@ function renderGameplay(){
     // Damage flash
     if(game.damageFlash>0.01){
         ctx.fillStyle=`rgba(255,0,0,${game.damageFlash*0.3})`;
-        ctx.fillRect(0,0,canvas.width,canvas.height);
+        ctx.fillRect(0,0,cw,ch);
     }
 
     // HUD
@@ -1304,7 +1318,7 @@ function renderGameplay(){
     // Iran flavor text
     if(game.flag.key==='iran' && game.iranMsg){
         const alpha = Math.min(1, game.iranMsgTimer/2);
-        drawText(game.iranMsg, canvas.width/2, canvas.height-70, {size:14, align:'center', color:`rgba(170,102,255,${alpha})`, glow:4});
+        drawText(game.iranMsg, cw/2, ch-70, {size:14, align:'center', color:`rgba(170,102,255,${alpha})`, glow:4});
     }
 
     drawScanlines();
@@ -1360,7 +1374,7 @@ function renderCoastlines(){
         ctx.stroke();
         // Label
         const qMid=6150, sqx=wToSx(qMid);
-        if(sqx>0&&sqx<canvas.width){
+        if(sqx>0&&sqx<cw){
             drawText('QESHM ISLAND', sqx, wToSy(iranCoastY(qMid)+45), {size:9, color:'#2a5a3a', align:'center'});
         }
     }
@@ -1368,11 +1382,11 @@ function renderCoastlines(){
     // Oman coast (bottom)
     ctx.fillStyle = C_LAND;
     ctx.beginPath();
-    ctx.moveTo(wToSx(x0), canvas.height);
+    ctx.moveTo(wToSx(x0), ch);
     for(let wx=x0;wx<=x1;wx+=step){
         ctx.lineTo(wToSx(wx), wToSy(omanCoastY(wx)));
     }
-    ctx.lineTo(wToSx(x1), canvas.height);
+    ctx.lineTo(wToSx(x1), ch);
     ctx.closePath();
     ctx.fill();
 
@@ -1389,7 +1403,7 @@ function renderCoastlines(){
     // Islets — small rocky islands
     for(const il of islets){
         const sx=wToSx(il.x), sy=wToSy(il.y);
-        if(sx<-80||sx>canvas.width+80) continue;
+        if(sx<-80||sx>cw+80) continue;
         ctx.fillStyle = C_LAND;
         ctx.beginPath();
         for(let i=0;i<il.pts.length;i++){
@@ -1416,7 +1430,7 @@ function renderCoastlines(){
     // Docks / piers extending from coast
     for(const dk of docks){
         const sx=wToSx(dk.x);
-        if(sx<-100||sx>canvas.width+100) continue;
+        if(sx<-100||sx>cw+100) continue;
         const sy=wToSy(dk.coastY);
         const dirPx = dk.dir * dk.len * scale;
         const w = dk.width * scale;
@@ -1444,12 +1458,12 @@ function renderCoastlines(){
     const irSy = wToSy(iranCoastY(labelX)*0.35);
     const omSy = wToSy(omanCoastY(labelX)+(WORLD_H-omanCoastY(labelX))*0.5);
     drawText('I R A N', wToSx(labelX), Math.max(15, irSy), {size:13, color:'#1a4030', align:'center', bold:true});
-    drawText('O M A N / U A E', wToSx(labelX), Math.min(canvas.height-15, omSy), {size:13, color:'#1a4030', align:'center', bold:true});
+    drawText('O M A N / U A E', wToSx(labelX), Math.min(ch-15, omSy), {size:13, color:'#1a4030', align:'center', bold:true});
 }
 
 function renderHUD(){
     const f = game.flag;
-    const mob = canvas.width<600;
+    const mob = cw<600;
     const pad = mob?8:15;
 
     // Flag
@@ -1469,48 +1483,50 @@ function renderHUD(){
     const hullPct = player.hp/MAX_HP;
     const hullCol = hullPct>0.6?C_GREEN:hullPct>0.3?C_GOLD:C_RED;
     const hullFlash = hullPct<0.15 && Math.sin(game.time*8)>0;
-    drawText(mob?'HULL':'HULL INTEGRITY', canvas.width-pad, pad, {size:mob?8:10, color:'#557755', align:'right'});
-    const barW = mob?Math.min(110,canvas.width*0.28):180, barH=mob?10:14;
-    const barX=canvas.width-pad-barW, barY=pad+(mob?12:16);
+    drawText(mob?'HULL':'HULL INTEGRITY', cw-pad, pad, {size:mob?8:10, color:'#557755', align:'right'});
+    const barW = mob?Math.min(110,cw*0.28):180, barH=mob?10:14;
+    const barX=cw-pad-barW, barY=pad+(mob?12:16);
     ctx.fillStyle='#112211'; ctx.fillRect(barX,barY,barW,barH);
     ctx.fillStyle = hullFlash?'#ff0000':hullCol;
     ctx.fillRect(barX,barY,barW*hullPct,barH);
     ctx.strokeStyle='#336633'; ctx.lineWidth=1;
     ctx.strokeRect(barX,barY,barW,barH);
-    drawText(Math.round(hullPct*100)+'%', canvas.width-pad, barY+(mob?-1:1), {size:mob?9:11, color:hullCol, align:'right', bold:true});
+    drawText(Math.round(hullPct*100)+'%', cw-pad, barY+(mob?-1:1), {size:mob?9:11, color:hullCol, align:'right', bold:true});
 
     // Progress bar
     const pct = clamp((player.x-300)/(MAP_W-600),0,1);
-    const pBarW = canvas.width*(mob?0.55:0.5);
-    const pBarX = (canvas.width-pBarW)/2;
-    const pBarY = canvas.height-(mob?26:35);
+    const pBarW = cw*(mob?0.55:0.5);
+    const pBarX = (cw-pBarW)/2;
+    const pBarY = ch-(mob?26:35);
     const pBarH = mob?7:10;
-    drawText(mob?'TRANSIT':'STRAIT TRANSIT', canvas.width/2, pBarY-(mob?12:16), {size:mob?8:10, color:'#557755', align:'center'});
+    drawText(mob?'TRANSIT':'STRAIT TRANSIT', cw/2, pBarY-(mob?12:16), {size:mob?8:10, color:'#557755', align:'center'});
     ctx.fillStyle='#112211'; ctx.fillRect(pBarX,pBarY,pBarW,pBarH);
     ctx.fillStyle=C_GREEN; ctx.fillRect(pBarX,pBarY,pBarW*pct,pBarH);
     ctx.strokeStyle='#336633'; ctx.lineWidth=1; ctx.strokeRect(pBarX,pBarY,pBarW,pBarH);
     ctx.fillStyle='#fff'; ctx.beginPath();
     const mx=pBarX+pBarW*pct;
     ctx.moveTo(mx,pBarY-2); ctx.lineTo(mx-3,pBarY-6); ctx.lineTo(mx+3,pBarY-6); ctx.closePath(); ctx.fill();
-    drawText(Math.round(pct*100)+'%', canvas.width/2, pBarY+pBarH+3, {size:mob?9:11, color:C_GREEN, align:'center'});
+    drawText(Math.round(pct*100)+'%', cw/2, pBarY+pBarH+3, {size:mob?9:11, color:C_GREEN, align:'center'});
 
-    if(!mob) drawText('DIST: '+Math.round(player.x)+' / '+(MAP_W-300), canvas.width-pad, canvas.height-35, {size:10, color:'#336633', align:'right'});
+    if(!mob) drawText('DIST: '+Math.round(player.x)+' / '+(MAP_W-300), cw-pad, ch-35, {size:10, color:'#336633', align:'right'});
     const mins=Math.floor(game.gameTime/60), secs=Math.floor(game.gameTime%60);
-    drawText(String(mins).padStart(2,'0')+':'+String(secs).padStart(2,'0'), canvas.width-pad, canvas.height-(mob?10:20), {size:mob?9:11, color:'#557755', align:'right'});
+    drawText(String(mins).padStart(2,'0')+':'+String(secs).padStart(2,'0'), cw-pad, ch-(mob?10:20), {size:mob?9:11, color:'#557755', align:'right'});
 }
 
 function renderEncounter(){
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillRect(0,0,cw,ch);
 
     const enc = game.encounter;
-    const mob = canvas.width<600;
-    const fs = mob?11:13;
-    const fsH = mob?11:14;
+    const mob = cw<600;
+    const fs = Math.max(11, Math.min(16, panelW*0.035));
+    const fsH = Math.max(11, Math.min(18, panelW*0.04));
     const lineH = fs+5;
-    const choiceH = mob?28:34;
+    const panelH = Math.min(Math.max(100,200), ch*0.92);
+            const panelW = mob ? cw*0.94 : Math.min(620, cw*0.82);
+            const choiceH = Math.max(28, panelH*0.07);
     const pad = mob?12:20;
-    const panelW = mob ? canvas.width*0.94 : Math.min(620, canvas.width*0.82);
+    const panelW = mob ? cw*0.94 : Math.min(620, cw*0.82);
     const textW = panelW-pad*2;
 
     // Pre-calc height
@@ -1521,9 +1537,9 @@ function renderEncounter(){
     if(enc.phase==='dialogue') needH += 10+5*choiceH+10;
     if(enc.phase==='result') needH += 100;
     needH += 35;
-    const panelH = Math.min(Math.max(needH,200), canvas.height*0.92);
-    const px = (canvas.width-panelW)/2;
-    const py = (canvas.height-panelH)/2;
+    const panelH = Math.min(Math.max(needH,200), ch*0.92);
+    const px = (cw-panelW)/2;
+    const py = (ch-panelH)/2;
 
     ctx.fillStyle = 'rgba(5,12,5,0.95)';
     ctx.fillRect(px,py,panelW,panelH);
@@ -1581,32 +1597,32 @@ function renderEncounter(){
 
 function renderGameOver(){
     ctx.fillStyle='#040804';
-    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillRect(0,0,cw,ch);
 
     const f = game.flag;
-    const mob = canvas.width<600;
-    const panelW = mob ? canvas.width*0.94 : Math.min(650, canvas.width*0.88);
-    const px = (canvas.width-panelW)/2;
+    const mob = cw<600;
+    const panelW = mob ? cw*0.94 : Math.min(650, cw*0.88);
+    const px = (cw-panelW)/2;
     const pad = mob?10:15;
     const fadeIn = clamp(game.overTimer/1.5, 0, 1);
-    const fsBody = mob?10:13;
+    const fsBody = Math.max(10, Math.min(16, panelW*0.035));
     const fsStat = mob?10:12;
-    const lineS = mob?18:22;
+    const lineS = Math.max(18, panelW*0.05);
 
     ctx.globalAlpha = fadeIn;
 
     const border = '\u2550'.repeat(Math.floor(panelW/(mob?8:10)));
     let yy = mob?20:50;
-    drawText(border, canvas.width/2, yy, {size:mob?10:14, align:'center', color:C_PANELBDR});
+    drawText(border, cw/2, yy, {size:mob?10:14, align:'center', color:C_PANELBDR});
     yy+=mob?18:25;
-    drawText('THE HORMUZ TIMES', canvas.width/2, yy, {size:mob?16:24, align:'center', color:C_GREEN, bold:true, glow:10});
+    drawText('THE HORMUZ TIMES', cw/2, yy, {size:mob?16:24, align:'center', color:C_GREEN, bold:true, glow:10});
     yy+=mob?15:22;
-    drawText('"All the news that\'s fit to transmit"', canvas.width/2, yy, {size:mob?8:10, align:'center', color:'#336633'});
+    drawText('"All the news that\'s fit to transmit"', cw/2, yy, {size:mob?8:10, align:'center', color:'#336633'});
     yy+=mob?12:20;
-    drawText(border, canvas.width/2, yy, {size:mob?10:14, align:'center', color:C_PANELBDR});
+    drawText(border, cw/2, yy, {size:mob?10:14, align:'center', color:C_PANELBDR});
     yy+=mob?16:30;
 
-    yy = wrapText(game.headline, px+pad, yy, panelW-pad*2, mob?20:28, {size:mob?14:20, color:'#eeddaa', bold:true, glow:3});
+    yy = wrapText(game.headline, px+pad, yy, panelW-pad*2, Math.max(20, panelW*0.06), {size:Math.max(14, panelW*0.05), color:'#eeddaa', bold:true, glow:3});
     yy+=mob?8:15;
 
     ctx.strokeStyle='#1a5533'; ctx.lineWidth=1;
@@ -1614,15 +1630,15 @@ function renderGameOver(){
     yy+=mob?12:20;
 
     if(game.survived || f.key==='iran'){
-        drawText('FINAL SCORE', canvas.width/2, yy, {size:mob?14:18, align:'center', color:C_GOLD, bold:true, glow:6});
+        drawText('FINAL SCORE', cw/2, yy, {size:mob?14:18, align:'center', color:C_GOLD, bold:true, glow:6});
         yy+=mob?22:28;
-        drawText(fmtMoney(game.score), canvas.width/2, yy, {size:mob?24:32, align:'center', color:game.score>0?C_GOLD:'#aa66ff', bold:true, glow:10});
+        drawText(fmtMoney(game.score), cw/2, yy, {size:mob?24:32, align:'center', color:game.score>0?C_GOLD:'#aa66ff', bold:true, glow:10});
         yy+=mob?32:45;
 
         if(f.key==='iran'){
-            drawText('You sailed freely. No one stopped you.', canvas.width/2, yy, {size:fsBody, align:'center', color:'#aa66ff'});
+            drawText('You sailed freely. No one stopped you.', cw/2, yy, {size:fsBody, align:'center', color:'#aa66ff'});
             yy+=mob?16:20;
-            drawText('No one bought your oil either.', canvas.width/2, yy, {size:fsBody, align:'center', color:'#aa66ff'});
+            drawText('No one bought your oil either.', cw/2, yy, {size:fsBody, align:'center', color:'#aa66ff'});
             yy+=mob?20:30;
         } else {
             const pct = game.transitPct;
@@ -1646,15 +1662,15 @@ function renderGameOver(){
             yy+=mob?6:10;
         }
     } else {
-        drawText('FINAL SCORE: $0', canvas.width/2, yy, {size:mob?16:22, align:'center', color:C_RED, bold:true, glow:6});
+        drawText('FINAL SCORE: $0', cw/2, yy, {size:mob?16:22, align:'center', color:C_RED, bold:true, glow:6});
         yy+=mob?25:35;
-        drawText('Transit: '+Math.round(game.transitPct*100)+'%', canvas.width/2, yy, {size:fsBody, align:'center', color:'#886666'});
+        drawText('Transit: '+Math.round(game.transitPct*100)+'%', cw/2, yy, {size:fsBody, align:'center', color:'#886666'});
         yy+=mob?16:22;
         if(game.lastWords){
             wrapText('"'+game.lastWords+'"', px+pad, yy, panelW-pad*2, mob?16:20, {size:fsBody, color:'#aa8866', align:'center'});
             yy+=mob?20:30;
         }
-        drawText('"Should\'ve picked China."', canvas.width/2, yy, {size:mob?10:12, align:'center', color:'#555'});
+        drawText('"Should\'ve picked China."', cw/2, yy, {size:mob?10:12, align:'center', color:'#555'});
         yy+=mob?16:25;
     }
 
@@ -1664,7 +1680,7 @@ function renderGameOver(){
 
     if(game.overTimer>1){
         const txt = mob ? '\u25C0 Tap left: Again    Tap right: Flags \u25B6' : '[R] Try Again   [F] Change Flag';
-        drawText(txt, canvas.width/2, yy, {size:mob?11:14, align:'center', color:C_GREEN, glow:4});
+        drawText(txt, cw/2, yy, {size:mob?11:14, align:'center', color:C_GREEN, glow:4});
     }
 
     ctx.globalAlpha=1;
@@ -1673,15 +1689,15 @@ function renderGameOver(){
 
 function drawScanlines(){
     ctx.fillStyle='rgba(0,0,0,0.04)';
-    for(let y=0;y<canvas.height;y+=3){
-        ctx.fillRect(0,y,canvas.width,1);
+    for(let y=0;y<ch;y+=3){
+        ctx.fillRect(0,y,cw,1);
     }
     // Vignette
-    const grad=ctx.createRadialGradient(canvas.width/2,canvas.height/2,canvas.height*0.3,canvas.width/2,canvas.height/2,canvas.height*0.9);
+    const grad=ctx.createRadialGradient(cw/2,ch/2,ch*0.3,cw/2,ch/2,ch*0.9);
     grad.addColorStop(0,'rgba(0,0,0,0)');
     grad.addColorStop(1,'rgba(0,0,0,0.35)');
     ctx.fillStyle=grad;
-    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillRect(0,0,cw,ch);
 }
 
 // ============================================================
@@ -1689,6 +1705,7 @@ function drawScanlines(){
 // ============================================================
 
 function update(dt){
+    if(cw < ch && cw < 800) return;
     game.time += dt;
     switch(game.screen){
         case 'title': updateTitle(dt); break;
@@ -1707,6 +1724,15 @@ function update(dt){
 }
 
 function render(){
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // ensure transform is set for each frame
+    if(cw < ch && cw < 800){
+        ctx.fillStyle = '#0a1628';
+        ctx.fillRect(0,0,cw,ch);
+        drawText('PLEASE ROTATE DEVICE', cw/2, ch/2-20, {size: cw*0.06, align:'center', color:'#ff3333', bold:true, glow:10});
+        drawText('Landscape required for optimal transit.', cw/2, ch/2+30, {size: cw*0.035, align:'center', color:'#33ff88'});
+        ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset for next frame just in case
+        return;
+    }
     ctx.save();
     // Screen shake
     if(game.screenShake>0.5){

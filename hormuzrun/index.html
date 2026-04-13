@@ -120,6 +120,8 @@ canvas{display:block;cursor:crosshair;image-rendering:auto;position:fixed;top:0;
         <div class="sub">// A Strait of Hormuz Transit Simulation</div>
         <button id="fs-btn">▶ ENTER GAME</button>
         <div class="hint">Fullscreen recommended for optimal experience</div>
+        <div class="hint" style="margin-top:24px;font-size:10px;opacity:0.4">&copy; 2026 Eli Schwimmer</div>
+        <div class="hint" style="font-size:9px;opacity:0.3;margin-top:2px">Kneidels of Steel Technologies</div>
     </div>
 </div>
 
@@ -740,6 +742,14 @@ const FLAGS = [
         desc:"Pre-approved passage courtesy of Beijing's \"Belt, Road & Strait\" initiative. Low risk, low reward. Your oil arrives safely and is immediately added to the Strategic Petroleum Reserve, never to be seen again.",
     },
     {
+        key:'pakistan', name:'Pakistan', code:'PK', emoji:'\u{1F1F5}\u{1F1F0}',
+        diff:'MEDIUM-EASY', diffCol:'#88dd44', multi:0.9,
+        threat:0.25, bluff:0.45, escort:0.15, stealth:0.45,
+        mines:0.35, drones:0.2, debris:0.3, maxEnc:2,
+        toll:1500000,
+        desc:"Ceasefire broker privileges grant preferred passage. Terms and conditions apply. Ceasefire may expire without notice. Pakistan is not responsible for any military action occurring after ceasefire expiration, which could be any moment now.",
+    },
+    {
         key:'india', name:'India', code:'IN', emoji:'\u{1F1EE}\u{1F1F3}',
         diff:'MEDIUM', diffCol:'#ffcc33', multi:1.2,
         threat:0.4, bluff:0.4, escort:0.35, stealth:0.4,
@@ -756,12 +766,12 @@ const FLAGS = [
         desc:"Strategy: broadcast \"MUSLIM-OWNED VESSEL\" on all frequencies. Effectiveness: variable. Side effects may include theological debates with IRGC patrol operators.",
     },
     {
-        key:'pakistan', name:'Pakistan', code:'PK', emoji:'\u{1F1F5}\u{1F1F0}',
-        diff:'MEDIUM-EASY', diffCol:'#88dd44', multi:0.9,
-        threat:0.25, bluff:0.45, escort:0.15, stealth:0.45,
-        mines:0.35, drones:0.2, debris:0.3, maxEnc:2,
-        toll:1500000,
-        desc:"Ceasefire broker privileges grant preferred passage. Terms and conditions apply. Ceasefire may expire without notice. Pakistan is not responsible for any military action occurring after ceasefire expiration, which could be any moment now.",
+        key:'liberia', name:'Liberia', code:'LR', emoji:'\u{1F1F1}\u{1F1F7}',
+        diff:'HARD', diffCol:'#ff6633', multi:1.5,
+        threat:0.55, bluff:0.6, escort:0.05, stealth:0.5,
+        mines:0.65, drones:0.5, debris:0.55, maxEnc:3,
+        toll:2500000,
+        desc:"Flag of convenience, inconvenience of flag. You could be anyone \u2014 Greek, Chinese, Norwegian \u2014 and that ambiguity makes everyone nervous. The IRGC doesn't like mysteries.",
     },
     {
         key:'uk', name:'United Kingdom', code:'GB', emoji:'\u{1F1EC}\u{1F1E7}',
@@ -778,14 +788,6 @@ const FLAGS = [
         mines:1.0, drones:1.0, debris:0.8, maxEnc:3,
         toll:4000000,
         desc:"You are the main character and this is a horror movie. Everything in the strait wants you dead. Maximum cargo value. Maximum hostility. Maximum American exceptionalism.",
-    },
-    {
-        key:'liberia', name:'Liberia', code:'LR', emoji:'\u{1F1F1}\u{1F1F7}',
-        diff:'HARD', diffCol:'#ff6633', multi:1.5,
-        threat:0.55, bluff:0.6, escort:0.05, stealth:0.5,
-        mines:0.65, drones:0.5, debris:0.55, maxEnc:3,
-        toll:2500000,
-        desc:"Flag of convenience, inconvenience of flag. You could be anyone \u2014 Greek, Chinese, Norwegian \u2014 and that ambiguity makes everyone nervous. The IRGC doesn't like mysteries.",
     },
     {
         key:'iran', name:'Iran', code:'IR', emoji:'\u{1F1EE}\u{1F1F7}',

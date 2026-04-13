@@ -261,6 +261,9 @@ const SFX = {
     muted: false,
     _wantMusic: false,
 
+    _musicBuffer: null,
+    _bufSrc: null,
+
     init() {
         if (this.ctx) return;
         this.ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -268,24 +271,33 @@ const SFX = {
         this.master.gain.value = this.masterVol;
         this.master.connect(this.ctx.destination);
 
-        // Route music through Web Audio so it shares the unlocked AudioContext
+        // Music gain node
         this.musicGain = this.ctx.createGain();
         this.musicGain.gain.value = this.musicVol;
         this.musicGain.connect(this.ctx.destination);
-        try {
-            this._musicSrc = this.ctx.createMediaElementSource(this.musicEl);
-            this._musicSrc.connect(this.musicGain);
-        } catch(e) {}
 
-        // Force-load on mobile (preload="auto" is ignored)
-        this.musicEl.load();
+        // Decode music into a Web Audio buffer — completely bypasses <audio>
+        // element restrictions on mobile (AudioContext is already unlocked by SFX)
+        const url = this.musicEl ? this.musicEl.getAttribute('src') : 'theme.mp3';
+        fetch(url)
+            .then(r => r.arrayBuffer())
+            .then(buf => this.ctx.decodeAudioData(buf))
+            .then(decoded => {
+                this._musicBuffer = decoded;
+                if (this._wantMusic && !this._bufSrc) this._startBuffer();
+            })
+            .catch(() => {});
+    },
 
-        // When audio data loads on mobile, retry play if we want music
-        this.musicEl.addEventListener('canplaythrough', () => {
-            if (this._wantMusic && this.musicEl.paused) {
-                this.musicEl.play().catch(() => {});
-            }
-        });
+    _startBuffer() {
+        if (!this._musicBuffer || !this.ctx) return;
+        if (this._bufSrc) { try { this._bufSrc.stop(); } catch(e) {} this._bufSrc = null; }
+        const src = this.ctx.createBufferSource();
+        src.buffer = this._musicBuffer;
+        src.loop = true;
+        src.connect(this.musicGain);
+        src.start(0);
+        this._bufSrc = src;
     },
 
     resume() {
@@ -294,19 +306,16 @@ const SFX = {
 
     // ---- Music controls ----
     playMusic() {
-        if (!this.musicEl) return;
         this._wantMusic = true;
-        if (this.musicGain) {
+        if (this.musicGain && this.ctx) {
             this.musicGain.gain.cancelScheduledValues(this.ctx.currentTime);
             this.musicGain.gain.value = this.musicVol;
         }
-        this.musicEl.play().catch(() => {});
+        if (!this._bufSrc && this._musicBuffer) this._startBuffer();
     },
     stopMusic() {
-        if (!this.musicEl) return;
         this._wantMusic = false;
-        this.musicEl.pause();
-        this.musicEl.currentTime = 0;
+        if (this._bufSrc) { try { this._bufSrc.stop(); } catch(e) {} this._bufSrc = null; }
         if (this.musicGain) this.musicGain.gain.value = this.musicVol;
     },
     fadeMusic(vol, dur) {
@@ -1327,7 +1336,7 @@ canvas.addEventListener('touchstart', e => {
     const t = e.touches[0];
     mouseX = t.clientX; mouseY = t.clientY; mouseClick = true;
     game.touchActive = true; game.touchX = t.clientX; game.touchY = t.clientY;
-    if (desktopAudioInit) { SFX.resume(); if (SFX._wantMusic && SFX.musicEl.paused) SFX.musicEl.play().catch(() => {}); }
+    if (desktopAudioInit) { SFX.resume(); if (SFX._wantMusic && !SFX._bufSrc) SFX.playMusic(); }
     if (typeof tryFullscreen === 'function' && game && game.screen === 'title') tryFullscreen();
     if (game.screen === 'gameplay') processDpadTouches(e.touches);
 }, {passive:false});
@@ -1784,6 +1793,9 @@ function updateGameplay(dt){
     let targetVX = BASE_SPEED;
     if(keys['d']||keys['arrowright']) targetVX += SPEED_BOOST;
     if(keys['a']||keys['arrowleft']) targetVX -= SPEED_BRAKE;
+    // D-pad speed (mobile)
+    if(game.dpad.right) targetVX += SPEED_BOOST;
+    if(game.dpad.left) targetVX -= SPEED_BRAKE;
     targetVX = Math.max(35, targetVX);
     player.vx += (targetVX-player.vx)*3.5*dt;
 
@@ -1793,8 +1805,6 @@ function updateGameplay(dt){
     // D-pad steering (mobile)
     if(game.dpad.up) vi = -1;
     if(game.dpad.down) vi = 1;
-    if(game.dpad.right) targetVX += SPEED_BOOST;
-    if(game.dpad.left) targetVX -= SPEED_BRAKE;
     player.vy += vi*VERT_ACCEL*dt;
     player.vy *= Math.max(0, 1-VERT_DRAG*dt);
     player.vy = clamp(player.vy, -MAX_VY, MAX_VY);

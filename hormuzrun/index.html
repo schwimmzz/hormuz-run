@@ -268,6 +268,18 @@ const SFX = {
         this.master.gain.value = this.masterVol;
         this.master.connect(this.ctx.destination);
 
+        // Route music through Web Audio so it shares the unlocked AudioContext
+        this.musicGain = this.ctx.createGain();
+        this.musicGain.gain.value = this.musicVol;
+        this.musicGain.connect(this.ctx.destination);
+        try {
+            this._musicSrc = this.ctx.createMediaElementSource(this.musicEl);
+            this._musicSrc.connect(this.musicGain);
+        } catch(e) {}
+
+        // Force-load on mobile (preload="auto" is ignored)
+        this.musicEl.load();
+
         // When audio data loads on mobile, retry play if we want music
         this.musicEl.addEventListener('canplaythrough', () => {
             if (this._wantMusic && this.musicEl.paused) {
@@ -284,7 +296,10 @@ const SFX = {
     playMusic() {
         if (!this.musicEl) return;
         this._wantMusic = true;
-        this.musicEl.volume = this.musicVol;
+        if (this.musicGain) {
+            this.musicGain.gain.cancelScheduledValues(this.ctx.currentTime);
+            this.musicGain.gain.value = this.musicVol;
+        }
         this.musicEl.play().catch(() => {});
     },
     stopMusic() {
@@ -292,18 +307,14 @@ const SFX = {
         this._wantMusic = false;
         this.musicEl.pause();
         this.musicEl.currentTime = 0;
+        if (this.musicGain) this.musicGain.gain.value = this.musicVol;
     },
     fadeMusic(vol, dur) {
-        if (!this.musicEl) return;
-        const start = this.musicEl.volume;
-        const diff = vol - start;
-        const steps = 20;
-        let i = 0;
-        const iv = setInterval(() => {
-            i++;
-            this.musicEl.volume = Math.max(0, Math.min(1, start + diff * (i/steps)));
-            if (i >= steps) clearInterval(iv);
-        }, dur/steps);
+        if (!this.musicGain || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        this.musicGain.gain.cancelScheduledValues(now);
+        this.musicGain.gain.setValueAtTime(this.musicGain.gain.value, now);
+        this.musicGain.gain.linearRampToValueAtTime(vol, now + dur / 1000);
     },
 
     // ---- Utility: create noise buffer ----
@@ -1205,6 +1216,7 @@ const DARK_FAIL = [
 
 // ---- Game State ----
 let game, player, camera, obstacles, drones, particles, encounterZones, islets, docks;
+let _deathTimeout = null;
 const keys = {};
 let mouseX = 0, mouseY = 0, mouseClick = false;
 
@@ -1315,6 +1327,7 @@ canvas.addEventListener('touchstart', e => {
     const t = e.touches[0];
     mouseX = t.clientX; mouseY = t.clientY; mouseClick = true;
     game.touchActive = true; game.touchX = t.clientX; game.touchY = t.clientY;
+    if (desktopAudioInit) { SFX.resume(); if (SFX._wantMusic && SFX.musicEl.paused) SFX.musicEl.play().catch(() => {}); }
     if (typeof tryFullscreen === 'function' && game && game.screen === 'title') tryFullscreen();
     if (game.screen === 'gameplay') processDpadTouches(e.touches);
 }, {passive:false});
@@ -1547,8 +1560,10 @@ function renderParticles(){
 
 // ---- Start Transit ----
 function startTransit(){
+    if (_deathTimeout) { clearTimeout(_deathTimeout); _deathTimeout = null; }
     SFX.engineStart();
     SFX.blip();
+    SFX.playMusic();
     const f = FLAGS[game.flagIdx];
     game.flag = f;
     game.gameTime = 0;
@@ -1574,6 +1589,8 @@ function startTransit(){
 
 // ---- Game Over ----
 function triggerGameOver(survived){
+    if(game.screen === 'gameOver') return;
+    _deathTimeout = null;
     SFX.engineStop();
     SFX.warnStop();
     if (survived) SFX.success(); else SFX.death();
@@ -1829,7 +1846,7 @@ function updateGameplay(dt){
         spawnParticles(player.x, player.y, 6, '#aa8855', 50, 2);
         SFX.scrape();
         game.landDmgTimer = LAND_DMG_COOLDOWN;
-        if(player.hp<=0){ player.alive=false; spawnParticles(player.x,player.y,40,'#ff6600',120,5); setTimeout(()=>triggerGameOver(false),1500); return; }
+        if(player.hp<=0){ player.alive=false; spawnParticles(player.x,player.y,40,'#ff6600',120,5); _deathTimeout=setTimeout(()=>triggerGameOver(false),1500); return; }
     }
 
     // Visual angle
@@ -1855,7 +1872,7 @@ function updateGameplay(dt){
             game.screenShake = o.type==='mine'?4:2;
             spawnParticles(o.x, o.y, o.type==='mine'?25:12, o.type==='mine'?'#ff4400':'#aa8855', 100, 3);
             if (o.type==='mine') SFX.explosion(); else SFX.scrape();
-            if(player.hp<=0){ player.alive=false; spawnParticles(player.x,player.y,40,'#ff6600',120,5); setTimeout(()=>triggerGameOver(false),1500); return; }
+            if(player.hp<=0){ player.alive=false; spawnParticles(player.x,player.y,40,'#ff6600',120,5); _deathTimeout=setTimeout(()=>triggerGameOver(false),1500); return; }
         }
     }
 
@@ -1878,7 +1895,7 @@ function updateGameplay(dt){
                 game.screenShake = 3;
                 spawnParticles(dr.x, dr.y, 18, '#ff2200', 90, 2.5);
                 SFX.droneHit();
-                if(player.hp<=0){ player.alive=false; spawnParticles(player.x,player.y,40,'#ff6600',120,5); setTimeout(()=>triggerGameOver(false),1500); return; }
+                if(player.hp<=0){ player.alive=false; spawnParticles(player.x,player.y,40,'#ff6600',120,5); _deathTimeout=setTimeout(()=>triggerGameOver(false),1500); return; }
             }
         }
     }
@@ -1967,7 +1984,7 @@ function updateEncounter(dt){
             if (player.alive) SFX.engineStart();
             game.screen = 'gameplay';
             keys['enter']=false; keys[' ']=false; mouseClick=false;
-            if(player.hp<=0){ player.alive=false; setTimeout(()=>triggerGameOver(false),500); }
+            if(player.hp<=0){ player.alive=false; _deathTimeout=setTimeout(()=>triggerGameOver(false),500); }
         }
     }
 }
@@ -2643,12 +2660,12 @@ function renderEncounter(){
 
     const enc = game.encounter;
     const mob = cw<600;
+    const panelW = mob ? cw*0.94 : Math.min(620, cw*0.82);
     const fs = Math.max(11, Math.min(16, panelW*0.035));
     const fsH = Math.max(11, Math.min(18, panelW*0.04));
     const lineH = fs+5;
     const choiceH = Math.max(28, ch*0.06);
     const pad = mob?12:20;
-    const panelW = mob ? cw*0.94 : Math.min(620, cw*0.82);
     const textW = panelW-pad*2;
 
     // Pre-calc height
@@ -2920,9 +2937,14 @@ function updateGateUI() {
 fsBtn.addEventListener('click', function() {
     SFX.init();
     SFX.resume();
+    // Unlock and start music BEFORE fullscreen (mobile needs user-gesture context)
     SFX.playMusic();
     desktopAudioInit = true;
-    // Request fullscreen, then lock landscape once granted
+    // Start game before fullscreen so audio isn't interrupted by the transition
+    gameStarted = true;
+    fsGate.classList.add('hidden');
+    resize();
+    // Request fullscreen after audio is unlocked
     const el = document.documentElement;
     const rfs = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
     function lockLandscape() {
@@ -2933,10 +2955,6 @@ fsBtn.addEventListener('click', function() {
     } else {
         lockLandscape();
     }
-    // Start game
-    gameStarted = true;
-    fsGate.classList.add('hidden');
-    resize();
 });
 
 

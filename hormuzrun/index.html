@@ -3,12 +3,50 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
+
+<!-- Primary Meta -->
+<title>Hormuz Run — Strait of Hormuz Transit Simulation</title>
+<meta name="description" content="Navigate a supertanker through the world's most dangerous strait. Choose your nation's flag, dodge IRGC fast-attack boats, survive mines, tolls, and geopolitical chaos. A browser-based simulation game.">
+<meta name="author" content="Eli Schwimmer">
+<meta name="keywords" content="Hormuz Run, Strait of Hormuz, browser game, simulation, tanker, naval, geopolitical, strategy, IRGC, shipping, Persian Gulf, web game">
+<meta name="robots" content="index, follow">
+<meta name="theme-color" content="#0a1a10">
+<meta name="color-scheme" content="dark">
+
+<!-- Open Graph / Facebook / Discord / Slack / LinkedIn -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Hormuz Run">
+<meta property="og:description" content="Navigate a supertanker through the world's most dangerous strait. Choose your flag. Dodge IRGC boats. Survive mines and geopolitical chaos. Play free in your browser.">
+<meta property="og:image" content="og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Hormuz Run — a green sonar display with the title HORMUZ RUN and a tagline about navigating a tanker through hostile waters">
+<meta property="og:site_name" content="Hormuz Run">
+<meta property="og:locale" content="en_US">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Hormuz Run">
+<meta name="twitter:description" content="Navigate a supertanker through the world's most dangerous strait. Choose your flag. Dodge IRGC boats. Survive. A free browser game.">
+<meta name="twitter:image" content="og-image.png">
+<meta name="twitter:image:alt" content="Hormuz Run — sonar display with game title">
+
+<!-- Favicons & App Icons -->
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+
+<!-- Mobile App Meta -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Hormuz Run">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#000000">
+<meta name="application-name" content="Hormuz Run">
+<meta name="msapplication-TileColor" content="#0a1a10">
+<meta name="format-detection" content="telephone=no">
+
+<!-- Manifest -->
 <link rel="manifest" href="manifest.json">
-<title>HORMUZ RUN</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:100%;height:100%;overflow:hidden;background:#000;position:fixed;top:0;left:0}
@@ -144,7 +182,8 @@ canvas{display:block;cursor:crosshair;image-rendering:auto;position:fixed;top:0;
     font-size:clamp(16px, 4vw, 22px);
     font-weight:bold;
     letter-spacing:4px;
-    padding:clamp(14px,3vw,22px) clamp(36px,8vw,64px);
+    padding:clamp(14px,3vw,22px) clamp(48px,12vw,80px);
+    white-space:nowrap;
     cursor:pointer;
     text-transform:uppercase;
     transition: all 0.2s;

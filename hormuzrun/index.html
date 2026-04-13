@@ -240,212 +240,469 @@ const SFX = {
         return src;
     },
 
+    // ---- Utility: waveshaper for distortion ----
+    _distCurve: null,
+    distortion(amount) {
+        const ws = this.ctx.createWaveShaper();
+        if (!this._distCurve) {
+            const n = 256, curve = new Float32Array(n);
+            for (let i = 0; i < n; i++) {
+                const x = (i * 2) / n - 1;
+                curve[i] = (Math.PI + amount) * x / (Math.PI + amount * Math.abs(x));
+            }
+            this._distCurve = curve;
+        }
+        ws.curve = this._distCurve;
+        ws.oversample = '2x';
+        return ws;
+    },
+
     // ---- SFX generators ----
-    ping() { // sonar ping for title screen
+    ping() { // sonar ping — atmospheric with echo tail
         if (!this.ctx) return;
         const t = this.ctx.currentTime;
+        // Primary ping
         const osc = this.ctx.createOscillator();
         const g = this.ctx.createGain();
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(1200, t);
-        osc.frequency.exponentialRampToValueAtTime(800, t+0.15);
-        g.gain.setValueAtTime(0.15, t);
-        g.gain.exponentialRampToValueAtTime(0.001, t+0.4);
+        osc.frequency.setValueAtTime(1400, t);
+        osc.frequency.exponentialRampToValueAtTime(880, t + 0.12);
+        g.gain.setValueAtTime(0.18, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
         osc.connect(g); g.connect(this.master);
-        osc.start(t); osc.stop(t+0.4);
-    },
-
-    blip() { // UI navigation
-        if (!this.ctx) return;
-        const t = this.ctx.currentTime;
-        const osc = this.ctx.createOscillator();
-        const g = this.ctx.createGain();
-        osc.type = 'square';
-        osc.frequency.value = 660;
-        g.gain.setValueAtTime(0.08, t);
-        g.gain.exponentialRampToValueAtTime(0.001, t+0.06);
-        osc.connect(g); g.connect(this.master);
-        osc.start(t); osc.stop(t+0.06);
-    },
-
-    explosion() { // mine hit
-        if (!this.ctx) return;
-        const t = this.ctx.currentTime;
-        const n = this.noise(0.6);
-        const g = this.ctx.createGain();
-        const f = this.ctx.createBiquadFilter();
-        f.type = 'lowpass';
-        f.frequency.setValueAtTime(800, t);
-        f.frequency.exponentialRampToValueAtTime(100, t+0.5);
-        g.gain.setValueAtTime(0.7, t);
-        g.gain.exponentialRampToValueAtTime(0.001, t+0.5);
-        n.connect(f); f.connect(g); g.connect(this.master);
-        n.start(t); n.stop(t+0.6);
-        // Sub bass thump
-        const osc = this.ctx.createOscillator();
+        osc.start(t); osc.stop(t + 0.6);
+        // Harmonic overtone
+        const osc2 = this.ctx.createOscillator();
         const g2 = this.ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(80, t);
-        osc.frequency.exponentialRampToValueAtTime(20, t+0.3);
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(2800, t);
+        osc2.frequency.exponentialRampToValueAtTime(1760, t + 0.1);
+        g2.gain.setValueAtTime(0.04, t);
+        g2.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+        osc2.connect(g2); g2.connect(this.master);
+        osc2.start(t); osc2.stop(t + 0.3);
+        // Echo reflection
+        const osc3 = this.ctx.createOscillator();
+        const g3 = this.ctx.createGain();
+        osc3.type = 'sine';
+        osc3.frequency.setValueAtTime(1300, t + 0.2);
+        osc3.frequency.exponentialRampToValueAtTime(860, t + 0.3);
+        g3.gain.setValueAtTime(0.001, t);
+        g3.gain.setValueAtTime(0.06, t + 0.2);
+        g3.gain.exponentialRampToValueAtTime(0.001, t + 0.8);
+        osc3.connect(g3); g3.connect(this.master);
+        osc3.start(t); osc3.stop(t + 0.8);
+    },
+
+    blip() { // UI navigation — soft click with pitch sweep
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(500, t);
+        osc.frequency.exponentialRampToValueAtTime(800, t + 0.03);
+        g.gain.setValueAtTime(0.12, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+        osc.connect(g); g.connect(this.master);
+        osc.start(t); osc.stop(t + 0.08);
+        // Subtle body
+        const osc2 = this.ctx.createOscillator();
+        const g2 = this.ctx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.value = 1200;
+        g2.gain.setValueAtTime(0.03, t);
+        g2.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+        osc2.connect(g2); g2.connect(this.master);
+        osc2.start(t); osc2.stop(t + 0.04);
+    },
+
+    explosion() { // mine hit — heavy layered blast
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime;
+        // Layer 1: initial crack (sharp bandpass noise burst)
+        const n1 = this.noise(0.15);
+        const bp = this.ctx.createBiquadFilter();
+        bp.type = 'bandpass'; bp.frequency.value = 2500; bp.Q.value = 0.8;
+        const g1 = this.ctx.createGain();
+        g1.gain.setValueAtTime(0.6, t);
+        g1.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+        n1.connect(bp); bp.connect(g1); g1.connect(this.master);
+        n1.start(t); n1.stop(t + 0.15);
+        // Layer 2: body rumble (lowpass noise, long tail)
+        const n2 = this.noise(1.0);
+        const lp = this.ctx.createBiquadFilter();
+        lp.type = 'lowpass';
+        lp.frequency.setValueAtTime(600, t);
+        lp.frequency.exponentialRampToValueAtTime(60, t + 0.8);
+        const dist = this.distortion(8);
+        const g2 = this.ctx.createGain();
         g2.gain.setValueAtTime(0.5, t);
-        g2.gain.exponentialRampToValueAtTime(0.001, t+0.35);
-        osc.connect(g2); g2.connect(this.master);
-        osc.start(t); osc.stop(t+0.35);
+        g2.gain.setValueAtTime(0.45, t + 0.05);
+        g2.gain.exponentialRampToValueAtTime(0.001, t + 0.9);
+        n2.connect(lp); lp.connect(dist); dist.connect(g2); g2.connect(this.master);
+        n2.start(t); n2.stop(t + 1.0);
+        // Layer 3: sub-bass thump (you feel this one)
+        const sub = this.ctx.createOscillator();
+        const g3 = this.ctx.createGain();
+        sub.type = 'sine';
+        sub.frequency.setValueAtTime(70, t);
+        sub.frequency.exponentialRampToValueAtTime(18, t + 0.4);
+        g3.gain.setValueAtTime(0.55, t);
+        g3.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+        sub.connect(g3); g3.connect(this.master);
+        sub.start(t); sub.stop(t + 0.5);
+        // Layer 4: mid-range crunch
+        const n3 = this.noise(0.4);
+        const mid = this.ctx.createBiquadFilter();
+        mid.type = 'bandpass'; mid.frequency.value = 800; mid.Q.value = 1.2;
+        const g4 = this.ctx.createGain();
+        g4.gain.setValueAtTime(0.3, t + 0.02);
+        g4.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+        n3.connect(mid); mid.connect(g4); g4.connect(this.master);
+        n3.start(t); n3.stop(t + 0.4);
     },
 
-    droneHit() { // drone impact — sharper than mine
+    droneHit() { // drone impact — metallic crack + body thump
         if (!this.ctx) return;
         const t = this.ctx.currentTime;
-        const n = this.noise(0.3);
-        const g = this.ctx.createGain();
-        const f = this.ctx.createBiquadFilter();
-        f.type = 'bandpass';
-        f.frequency.value = 2000;
-        f.Q.value = 2;
-        g.gain.setValueAtTime(0.4, t);
-        g.gain.exponentialRampToValueAtTime(0.001, t+0.25);
-        n.connect(f); f.connect(g); g.connect(this.master);
-        n.start(t); n.stop(t+0.3);
-    },
-
-    scrape() { // land collision
-        if (!this.ctx) return;
-        const t = this.ctx.currentTime;
-        const n = this.noise(0.2);
-        const g = this.ctx.createGain();
-        const f = this.ctx.createBiquadFilter();
-        f.type = 'highpass';
-        f.frequency.value = 600;
-        g.gain.setValueAtTime(0.15, t);
-        g.gain.exponentialRampToValueAtTime(0.001, t+0.15);
-        n.connect(f); f.connect(g); g.connect(this.master);
-        n.start(t); n.stop(t+0.2);
-    },
-
-    radioStatic() { // encounter opens
-        if (!this.ctx) return;
-        const t = this.ctx.currentTime;
-        const n = this.noise(0.8);
-        const g = this.ctx.createGain();
-        const f = this.ctx.createBiquadFilter();
-        f.type = 'bandpass';
-        f.frequency.value = 1500;
-        f.Q.value = 5;
-        g.gain.setValueAtTime(0.2, t);
-        g.gain.setValueAtTime(0.12, t+0.1);
-        g.gain.exponentialRampToValueAtTime(0.001, t+0.7);
-        n.connect(f); f.connect(g); g.connect(this.master);
-        n.start(t); n.stop(t+0.8);
-    },
-
-    tollPay() { // money leaving
-        if (!this.ctx) return;
-        const t = this.ctx.currentTime;
+        // Metallic transient (high-freq ring)
         const osc = this.ctx.createOscillator();
-        const g = this.ctx.createGain();
+        const g1 = this.ctx.createGain();
         osc.type = 'square';
-        osc.frequency.setValueAtTime(880, t);
-        osc.frequency.setValueAtTime(660, t+0.08);
-        osc.frequency.setValueAtTime(440, t+0.16);
-        g.gain.setValueAtTime(0.1, t);
-        g.gain.exponentialRampToValueAtTime(0.001, t+0.3);
-        osc.connect(g); g.connect(this.master);
-        osc.start(t); osc.stop(t+0.3);
-    },
-
-    death() { // ship destroyed
-        if (!this.ctx) return;
-        const t = this.ctx.currentTime;
-        // Long low rumble
-        const n = this.noise(2);
-        const g = this.ctx.createGain();
-        const f = this.ctx.createBiquadFilter();
-        f.type = 'lowpass';
-        f.frequency.setValueAtTime(400, t);
-        f.frequency.exponentialRampToValueAtTime(30, t+1.8);
-        g.gain.setValueAtTime(0.6, t);
-        g.gain.exponentialRampToValueAtTime(0.001, t+2.0);
-        n.connect(f); f.connect(g); g.connect(this.master);
-        n.start(t); n.stop(t+2.0);
-        // Descending tone
-        const osc = this.ctx.createOscillator();
+        osc.frequency.setValueAtTime(3200, t);
+        osc.frequency.exponentialRampToValueAtTime(1600, t + 0.03);
+        g1.gain.setValueAtTime(0.2, t);
+        g1.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+        osc.connect(g1); g1.connect(this.master);
+        osc.start(t); osc.stop(t + 0.06);
+        // Impact body
+        const n = this.noise(0.25);
+        const bp = this.ctx.createBiquadFilter();
+        bp.type = 'bandpass'; bp.frequency.value = 1400; bp.Q.value = 1.5;
         const g2 = this.ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(200, t);
-        osc.frequency.exponentialRampToValueAtTime(25, t+1.5);
-        g2.gain.setValueAtTime(0.3, t);
-        g2.gain.exponentialRampToValueAtTime(0.001, t+1.5);
-        osc.connect(g2); g2.connect(this.master);
-        osc.start(t); osc.stop(t+1.5);
-        // Fade music
-        this.fadeMusic(0, 1500);
+        g2.gain.setValueAtTime(0.35, t);
+        g2.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+        n.connect(bp); bp.connect(g2); g2.connect(this.master);
+        n.start(t); n.stop(t + 0.25);
+        // Short sub-thump
+        const sub = this.ctx.createOscillator();
+        const g3 = this.ctx.createGain();
+        sub.type = 'sine';
+        sub.frequency.setValueAtTime(120, t);
+        sub.frequency.exponentialRampToValueAtTime(50, t + 0.1);
+        g3.gain.setValueAtTime(0.25, t);
+        g3.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+        sub.connect(g3); g3.connect(this.master);
+        sub.start(t); sub.stop(t + 0.12);
     },
 
-    success() { // transit complete
+    scrape() { // hull grinding against land — sustained metallic grind
         if (!this.ctx) return;
         const t = this.ctx.currentTime;
-        const notes = [523, 659, 784, 1047];
-        notes.forEach((freq, i) => {
+        const dur = 0.4;
+        // Grinding noise layer (resonant bandpass)
+        const n1 = this.noise(dur);
+        const bp1 = this.ctx.createBiquadFilter();
+        bp1.type = 'bandpass'; bp1.frequency.value = 1800; bp1.Q.value = 3;
+        bp1.frequency.setValueAtTime(1800, t);
+        bp1.frequency.linearRampToValueAtTime(1200, t + dur);
+        const g1 = this.ctx.createGain();
+        g1.gain.setValueAtTime(0.2, t);
+        g1.gain.setValueAtTime(0.15, t + 0.05);
+        g1.gain.setValueAtTime(0.22, t + 0.1);
+        g1.gain.setValueAtTime(0.12, t + 0.2);
+        g1.gain.exponentialRampToValueAtTime(0.001, t + dur);
+        n1.connect(bp1); bp1.connect(g1); g1.connect(this.master);
+        n1.start(t); n1.stop(t + dur);
+        // Lower metal stress layer
+        const n2 = this.noise(dur);
+        const bp2 = this.ctx.createBiquadFilter();
+        bp2.type = 'bandpass'; bp2.frequency.value = 500; bp2.Q.value = 2;
+        const g2 = this.ctx.createGain();
+        g2.gain.setValueAtTime(0.12, t);
+        g2.gain.exponentialRampToValueAtTime(0.001, t + dur * 0.8);
+        n2.connect(bp2); bp2.connect(g2); g2.connect(this.master);
+        n2.start(t); n2.stop(t + dur);
+        // LFO modulation for irregular grinding texture
+        const lfo = this.ctx.createOscillator();
+        const lfoG = this.ctx.createGain();
+        lfo.frequency.value = 18;
+        lfoG.gain.value = 6;
+        lfo.connect(lfoG); lfoG.connect(bp1.Q);
+        lfo.start(t); lfo.stop(t + dur);
+    },
+
+    radioStatic() { // encounter opens — radio squelch + crackle
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime;
+        // Opening squelch tone
+        const sq = this.ctx.createOscillator();
+        const sqG = this.ctx.createGain();
+        sq.type = 'sawtooth';
+        sq.frequency.setValueAtTime(600, t);
+        sq.frequency.exponentialRampToValueAtTime(1200, t + 0.04);
+        sqG.gain.setValueAtTime(0.08, t);
+        sqG.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+        sq.connect(sqG); sqG.connect(this.master);
+        sq.start(t); sq.stop(t + 0.06);
+        // Main static body with modulated bandpass
+        const n = this.noise(0.9);
+        const bp = this.ctx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.setValueAtTime(1800, t);
+        bp.frequency.setValueAtTime(1200, t + 0.15);
+        bp.frequency.setValueAtTime(2000, t + 0.3);
+        bp.frequency.setValueAtTime(1400, t + 0.5);
+        bp.Q.value = 4;
+        const g = this.ctx.createGain();
+        g.gain.setValueAtTime(0.18, t + 0.02);
+        g.gain.setValueAtTime(0.06, t + 0.12);
+        g.gain.setValueAtTime(0.14, t + 0.2);
+        g.gain.setValueAtTime(0.04, t + 0.35);
+        g.gain.setValueAtTime(0.1, t + 0.45);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.8);
+        n.connect(bp); bp.connect(g); g.connect(this.master);
+        n.start(t); n.stop(t + 0.9);
+        // Crackle pops (short noise bursts)
+        [0.08, 0.19, 0.33, 0.52].forEach(offset => {
+            const pop = this.noise(0.03);
+            const pg = this.ctx.createGain();
+            pg.gain.setValueAtTime(0.15, t + offset);
+            pg.gain.exponentialRampToValueAtTime(0.001, t + offset + 0.02);
+            pop.connect(pg); pg.connect(this.master);
+            pop.start(t + offset); pop.stop(t + offset + 0.03);
+        });
+    },
+
+    tollPay() { // payment — metallic register ding + coin rattle
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime;
+        // Bright ding (sine + harmonic)
+        const osc = this.ctx.createOscillator();
+        const g1 = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = 1568; // G6
+        g1.gain.setValueAtTime(0.15, t);
+        g1.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+        osc.connect(g1); g1.connect(this.master);
+        osc.start(t); osc.stop(t + 0.35);
+        // Harmonic shimmer
+        const osc2 = this.ctx.createOscillator();
+        const g2 = this.ctx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.value = 3136; // G7
+        g2.gain.setValueAtTime(0.05, t);
+        g2.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+        osc2.connect(g2); g2.connect(this.master);
+        osc2.start(t); osc2.stop(t + 0.2);
+        // Descending coin tumble
+        const osc3 = this.ctx.createOscillator();
+        const g3 = this.ctx.createGain();
+        osc3.type = 'triangle';
+        osc3.frequency.setValueAtTime(1200, t + 0.06);
+        osc3.frequency.setValueAtTime(900, t + 0.12);
+        osc3.frequency.setValueAtTime(680, t + 0.18);
+        g3.gain.setValueAtTime(0.001, t);
+        g3.gain.setValueAtTime(0.07, t + 0.06);
+        g3.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+        osc3.connect(g3); g3.connect(this.master);
+        osc3.start(t); osc3.stop(t + 0.25);
+    },
+
+    death() { // ship destroyed — multi-stage destruction sequence
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime;
+        // Stage 1: Initial blast crack
+        const n1 = this.noise(0.2);
+        const hp = this.ctx.createBiquadFilter();
+        hp.type = 'bandpass'; hp.frequency.value = 2000; hp.Q.value = 0.5;
+        const g1 = this.ctx.createGain();
+        g1.gain.setValueAtTime(0.5, t);
+        g1.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+        n1.connect(hp); hp.connect(g1); g1.connect(this.master);
+        n1.start(t); n1.stop(t + 0.2);
+        // Stage 2: Heavy rolling rumble
+        const n2 = this.noise(2.5);
+        const lp = this.ctx.createBiquadFilter();
+        lp.type = 'lowpass';
+        lp.frequency.setValueAtTime(500, t);
+        lp.frequency.exponentialRampToValueAtTime(25, t + 2.2);
+        const dist = this.distortion(12);
+        const g2 = this.ctx.createGain();
+        g2.gain.setValueAtTime(0.15, t);
+        g2.gain.linearRampToValueAtTime(0.55, t + 0.3);
+        g2.gain.exponentialRampToValueAtTime(0.001, t + 2.5);
+        n2.connect(lp); lp.connect(dist); dist.connect(g2); g2.connect(this.master);
+        n2.start(t); n2.stop(t + 2.5);
+        // Stage 3: Metal stress groan (descending sawtooth)
+        const groan = this.ctx.createOscillator();
+        const gG = this.ctx.createGain();
+        groan.type = 'sawtooth';
+        groan.frequency.setValueAtTime(180, t + 0.1);
+        groan.frequency.exponentialRampToValueAtTime(30, t + 1.8);
+        const gF = this.ctx.createBiquadFilter();
+        gF.type = 'lowpass'; gF.frequency.value = 300;
+        gG.gain.setValueAtTime(0.001, t);
+        gG.gain.linearRampToValueAtTime(0.15, t + 0.3);
+        gG.gain.exponentialRampToValueAtTime(0.001, t + 1.8);
+        groan.connect(gF); gF.connect(gG); gG.connect(this.master);
+        groan.start(t); groan.stop(t + 1.8);
+        // Stage 4: Sub-bass death drop
+        const sub = this.ctx.createOscillator();
+        const g4 = this.ctx.createGain();
+        sub.type = 'sine';
+        sub.frequency.setValueAtTime(60, t);
+        sub.frequency.exponentialRampToValueAtTime(15, t + 2.0);
+        g4.gain.setValueAtTime(0.4, t);
+        g4.gain.exponentialRampToValueAtTime(0.001, t + 2.0);
+        sub.connect(g4); g4.connect(this.master);
+        sub.start(t); sub.stop(t + 2.0);
+        // Stage 5: Secondary explosion (delayed)
+        const n3 = this.noise(0.5);
+        const lp2 = this.ctx.createBiquadFilter();
+        lp2.type = 'lowpass'; lp2.frequency.value = 400;
+        const g5 = this.ctx.createGain();
+        g5.gain.setValueAtTime(0.001, t);
+        g5.gain.setValueAtTime(0.35, t + 0.4);
+        g5.gain.exponentialRampToValueAtTime(0.001, t + 0.9);
+        n3.connect(lp2); lp2.connect(g5); g5.connect(this.master);
+        n3.start(t); n3.stop(t + 1.0);
+        // Fade music
+        this.fadeMusic(0, 2000);
+    },
+
+    success() { // transit complete — triumphant brass-like fanfare
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime;
+        // Rich ascending chord: C5, E5, G5, C6 with harmonics
+        const notes = [
+            { f: 523, d: 0.00, type: 'sine' },    // C5
+            { f: 659, d: 0.10, type: 'sine' },    // E5
+            { f: 784, d: 0.20, type: 'sine' },    // G5
+            { f: 1047, d: 0.32, type: 'sine' },   // C6
+        ];
+        notes.forEach(n => {
+            // Fundamental
             const osc = this.ctx.createOscillator();
             const g = this.ctx.createGain();
-            osc.type = 'square';
-            osc.frequency.value = freq;
-            g.gain.setValueAtTime(0, t+i*0.12);
-            g.gain.linearRampToValueAtTime(0.1, t+i*0.12+0.02);
-            g.gain.exponentialRampToValueAtTime(0.001, t+i*0.12+0.3);
+            osc.type = n.type;
+            osc.frequency.value = n.f;
+            g.gain.setValueAtTime(0.001, t + n.d);
+            g.gain.linearRampToValueAtTime(0.12, t + n.d + 0.03);
+            g.gain.setValueAtTime(0.10, t + n.d + 0.15);
+            g.gain.exponentialRampToValueAtTime(0.001, t + n.d + 0.6);
             osc.connect(g); g.connect(this.master);
-            osc.start(t+i*0.12); osc.stop(t+i*0.12+0.3);
+            osc.start(t + n.d); osc.stop(t + n.d + 0.6);
+            // 2nd harmonic for warmth
+            const h = this.ctx.createOscillator();
+            const hg = this.ctx.createGain();
+            h.type = 'sine';
+            h.frequency.value = n.f * 2;
+            hg.gain.setValueAtTime(0.001, t + n.d);
+            hg.gain.linearRampToValueAtTime(0.03, t + n.d + 0.03);
+            hg.gain.exponentialRampToValueAtTime(0.001, t + n.d + 0.4);
+            h.connect(hg); hg.connect(this.master);
+            h.start(t + n.d); h.stop(t + n.d + 0.4);
+        });
+        // Final sustained chord (all notes ring together)
+        [523, 659, 784, 1047].forEach(f => {
+            const osc = this.ctx.createOscillator();
+            const g = this.ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.value = f;
+            g.gain.setValueAtTime(0.001, t + 0.45);
+            g.gain.linearRampToValueAtTime(0.06, t + 0.55);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 1.4);
+            osc.connect(g); g.connect(this.master);
+            osc.start(t + 0.45); osc.stop(t + 1.4);
         });
     },
 
     _warnOsc: null,
-    warnStart() { // low hull warning siren
+    warnStart() { // hull warning — urgent two-tone naval alarm
         if (!this.ctx || this._warnOsc) return;
+        // Two alternating tones for urgency
         const osc = this.ctx.createOscillator();
         const g = this.ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.value = 440;
-        g.gain.value = 0.06;
+        osc.type = 'sawtooth';
+        osc.frequency.value = 380;
+        g.gain.value = 0.0;
+        const filt = this.ctx.createBiquadFilter();
+        filt.type = 'lowpass'; filt.frequency.value = 800;
+        // LFO alternates pitch between two tones
         const lfo = this.ctx.createOscillator();
-        lfo.frequency.value = 3;
+        lfo.type = 'square';
+        lfo.frequency.value = 2.5;
         const lfoG = this.ctx.createGain();
-        lfoG.gain.value = 120;
+        lfoG.gain.value = 80; // swings between ~300 and ~460 Hz
         lfo.connect(lfoG); lfoG.connect(osc.frequency);
-        osc.connect(g); g.connect(this.master);
-        osc.start(); lfo.start();
-        this._warnOsc = { osc, lfo, gain: g };
+        // Amplitude pulse
+        const ampLfo = this.ctx.createOscillator();
+        ampLfo.type = 'square';
+        ampLfo.frequency.value = 2.5;
+        const ampG = this.ctx.createGain();
+        ampG.gain.value = 0.025;
+        ampLfo.connect(ampG); ampG.connect(g.gain);
+        g.gain.value = 0.04;
+        osc.connect(filt); filt.connect(g); g.connect(this.master);
+        osc.start(); lfo.start(); ampLfo.start();
+        this._warnOsc = { osc, lfo, ampLfo, gain: g, filt };
     },
     warnStop() {
         if (!this._warnOsc) return;
-        this._warnOsc.gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime+0.1);
+        const t = this.ctx.currentTime;
+        this._warnOsc.gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
         const w = this._warnOsc;
-        setTimeout(() => { w.osc.stop(); w.lfo.stop(); }, 150);
+        setTimeout(() => { w.osc.stop(); w.lfo.stop(); w.ampLfo.stop(); }, 200);
         this._warnOsc = null;
     },
 
-    // Continuous engine hum
+    // Continuous engine — multi-oscillator with mechanical texture
     _engineOsc: null,
     engineStart() {
         if (!this.ctx || this._engineOsc) return;
-        const osc = this.ctx.createOscillator();
+        // Fundamental chug
+        const osc1 = this.ctx.createOscillator();
+        osc1.type = 'triangle';
+        osc1.frequency.value = 42;
+        // Detuned harmonic for thickness
+        const osc2 = this.ctx.createOscillator();
+        osc2.type = 'sawtooth';
+        osc2.frequency.value = 84.5; // slight detune from 2nd harmonic
+        const filt = this.ctx.createBiquadFilter();
+        filt.type = 'lowpass'; filt.frequency.value = 200;
+        // Mechanical noise layer
+        const n = this.noise(0);
+        const nFilt = this.ctx.createBiquadFilter();
+        nFilt.type = 'bandpass'; nFilt.frequency.value = 120; nFilt.Q.value = 3;
+        const nG = this.ctx.createGain();
+        nG.gain.value = 0.015;
+        n.connect(nFilt); nFilt.connect(nG);
+        // Mix into gain
         const g = this.ctx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.value = 42;
-        g.gain.value = 0.04;
-        osc.connect(g); g.connect(this.master);
-        osc.start();
-        this._engineOsc = { osc, gain: g };
+        g.gain.value = 0.05;
+        osc1.connect(g);
+        osc2.connect(filt); filt.connect(g);
+        nG.connect(g);
+        g.connect(this.master);
+        osc1.start(); osc2.start(); n.start();
+        this._engineOsc = { osc1, osc2, noise: n, gain: g, filt, nFilt, nG };
     },
     engineUpdate(speed) {
         if (!this._engineOsc) return;
-        this._engineOsc.osc.frequency.value = 35 + speed * 0.12;
-        this._engineOsc.gain.gain.value = 0.03 + speed * 0.0003;
+        const base = 35 + speed * 0.12;
+        this._engineOsc.osc1.frequency.value = base;
+        this._engineOsc.osc2.frequency.value = base * 2.01; // slight detune
+        this._engineOsc.filt.frequency.value = 120 + speed * 0.5;
+        this._engineOsc.nFilt.frequency.value = 80 + speed * 0.3;
+        this._engineOsc.gain.gain.value = 0.04 + speed * 0.0004;
     },
     engineStop() {
         if (!this._engineOsc) return;
-        this._engineOsc.gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime+0.2);
+        this._engineOsc.gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.3);
         const e = this._engineOsc;
-        setTimeout(() => { e.osc.stop(); }, 250);
+        setTimeout(() => { e.osc1.stop(); e.osc2.stop(); e.noise.stop(); }, 350);
         this._engineOsc = null;
     },
 };

@@ -17,74 +17,118 @@ canvas{display:block;cursor:crosshair;image-rendering:auto;position:fixed;top:0;
 /* ---- Fullscreen Gate Overlay ---- */
 #fs-gate {
     position:fixed; top:0; left:0; width:100%; height:100%;
-    background:rgba(5,10,15,0.65);
+    background:radial-gradient(circle at 50% 38%, #0a1a10 0%, #050d08 45%, #020504 100%);
     display:flex; flex-direction:column;
     justify-content:center; align-items:center;
     z-index:1000;
     font-family:'Courier New','Consolas',monospace;
     touch-action:manipulation;
+    overflow:hidden;
 }
 #fs-gate.hidden { display:none; }
 
-/* Portrait: rotate message */
-#fs-rotate {
-    display:none;
-    flex-direction:column;
-    align-items:center;
-    gap:16px;
+/* Sonar animation */
+#fs-sonar {
+    position:absolute;
+    top:50%; left:50%;
+    transform:translate(-50%,-55%);
+    width:min(80vw, 80vh);
+    height:min(80vw, 80vh);
+    pointer-events:none;
 }
-#fs-rotate .icon {
-    font-size:48px;
-    animation: rock 1.5s ease-in-out infinite;
+.sonar-ring {
+    position:absolute; top:50%; left:50%;
+    border-radius:50%;
+    border:1px solid rgba(51,255,136,0.07);
+    transform:translate(-50%,-50%);
 }
-@keyframes rock {
-    0%,100% { transform: rotate(0deg); }
-    25% { transform: rotate(90deg); }
-    75% { transform: rotate(90deg); }
+.sonar-ring.r1 { width:25%; height:25%; }
+.sonar-ring.r2 { width:50%; height:50%; }
+.sonar-ring.r3 { width:75%; height:75%; }
+.sonar-ring.r4 { width:100%; height:100%; }
+.sonar-sweep {
+    position:absolute; top:50%; left:50%;
+    width:50%; height:2px;
+    transform-origin:0% 50%;
+    animation:sweep 4s linear infinite;
+    background:linear-gradient(90deg, rgba(51,255,136,0.4) 0%, rgba(51,255,136,0) 100%);
 }
-#fs-rotate .msg {
-    color:#ff3333;
-    font-size:18px;
-    font-weight:bold;
-    letter-spacing:2px;
+.sonar-sweep::after {
+    content:'';
+    position:absolute; top:50%; left:0;
+    width:100%; height:100%;
+    transform-origin:0% 50%;
+    transform:rotate(-15deg);
+    background:linear-gradient(90deg, rgba(51,255,136,0.08) 0%, transparent 100%);
+    filter:blur(6px);
+    height:60px; top:-30px;
 }
-#fs-rotate .sub {
-    color:#33ff88;
-    font-size:12px;
+@keyframes sweep { 0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)} }
+.sonar-ping {
+    position:absolute;
+    width:6px; height:6px;
+    border-radius:50%;
+    background:rgba(51,255,136,0.3);
+    animation:ping-fade 4s ease-out infinite;
+}
+@keyframes ping-fade {
+    0%,80%{opacity:0} 85%{opacity:0.6} 100%{opacity:0}
+}
+/* Pulse ring that expands outward */
+.sonar-pulse {
+    position:absolute; top:50%; left:50%;
+    width:10%; height:10%;
+    border-radius:50%;
+    border:1px solid rgba(51,255,136,0.2);
+    transform:translate(-50%,-50%);
+    animation:sonar-expand 4s ease-out infinite;
+}
+.sonar-pulse.p2 { animation-delay:2s; }
+@keyframes sonar-expand {
+    0%{width:5%;height:5%;opacity:0.4;border-color:rgba(51,255,136,0.3)}
+    100%{width:110%;height:110%;opacity:0;border-color:rgba(51,255,136,0)}
 }
 
-/* Landscape: fullscreen button */
+/* Portrait: rotate message (unused but kept) */
+#fs-rotate { display:none; flex-direction:column; align-items:center; gap:16px; }
+
+/* Prompt */
 #fs-prompt {
     display:none;
     flex-direction:column;
     align-items:center;
-    gap:24px;
+    gap:16px;
+    z-index:2;
+    text-align:center;
+    padding:0 20px;
 }
 #fs-prompt .title {
     color:#33ff88;
-    font-size:28px;
+    font-size:clamp(32px, 8vw, 56px);
     font-weight:bold;
-    letter-spacing:4px;
-    text-shadow: 0 0 20px rgba(51,255,136,0.4);
+    letter-spacing:clamp(4px, 1.5vw, 10px);
+    text-shadow: 0 0 30px rgba(51,255,136,0.5), 0 0 60px rgba(51,255,136,0.2);
+    line-height:1.1;
 }
 #fs-prompt .sub {
     color:#557755;
-    font-size:11px;
-    letter-spacing:2px;
+    font-size:clamp(10px, 2.5vw, 14px);
+    letter-spacing:3px;
 }
 #fs-btn {
     background:none;
     border:2px solid #33ff88;
     color:#33ff88;
     font-family:'Courier New','Consolas',monospace;
-    font-size:18px;
+    font-size:clamp(16px, 4vw, 22px);
     font-weight:bold;
-    letter-spacing:3px;
-    padding:16px 48px;
+    letter-spacing:4px;
+    padding:clamp(14px,3vw,22px) clamp(36px,8vw,64px);
     cursor:pointer;
     text-transform:uppercase;
     transition: all 0.2s;
     animation: pulse-border 2s infinite;
+    margin-top:8px;
 }
 #fs-btn:active {
     background:#33ff88;
@@ -92,13 +136,13 @@ canvas{display:block;cursor:crosshair;image-rendering:auto;position:fixed;top:0;
 }
 @keyframes pulse-border {
     0%,100% { box-shadow: 0 0 8px rgba(51,255,136,0.3); }
-    50% { box-shadow: 0 0 20px rgba(51,255,136,0.6); }
+    50% { box-shadow: 0 0 25px rgba(51,255,136,0.6), 0 0 50px rgba(51,255,136,0.15); }
 }
 #fs-prompt .hint {
     color:#336644;
-    font-size:9px;
+    font-size:clamp(8px,2vw,10px);
     letter-spacing:1px;
-    margin-top:8px;
+    margin-top:4px;
 }
 </style>
 </head>
@@ -107,21 +151,28 @@ canvas{display:block;cursor:crosshair;image-rendering:auto;position:fixed;top:0;
 
 <!-- Fullscreen gate overlay -->
 <div id="fs-gate">
-    <div id="fs-rotate">
-        <svg class="icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#33ff88" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
-            <line x1="12" y1="18" x2="12" y2="18.01"/>
-        </svg>
-        <div class="msg">ROTATE DEVICE</div>
-        <div class="sub">Landscape required for transit.</div>
+    <div id="fs-sonar">
+        <div class="sonar-ring r1"></div>
+        <div class="sonar-ring r2"></div>
+        <div class="sonar-ring r3"></div>
+        <div class="sonar-ring r4"></div>
+        <div class="sonar-sweep"></div>
+        <div class="sonar-pulse"></div>
+        <div class="sonar-pulse p2"></div>
+        <div class="sonar-ping" style="top:32%;left:58%"></div>
+        <div class="sonar-ping" style="top:44%;left:35%;animation-delay:1.5s"></div>
+        <div class="sonar-ping" style="top:62%;left:68%;animation-delay:2.8s"></div>
+        <div class="sonar-ping" style="top:28%;left:42%;animation-delay:0.7s"></div>
+        <div class="sonar-ping" style="top:55%;left:48%;animation-delay:3.3s"></div>
     </div>
+    <div id="fs-rotate"></div>
     <div id="fs-prompt">
         <div class="title">HORMUZ RUN</div>
         <div class="sub">// A Strait of Hormuz Transit Simulation</div>
-        <button id="fs-btn">▶ ENTER GAME</button>
+        <button id="fs-btn">&#9654; ENTER GAME</button>
         <div class="hint">Fullscreen recommended for optimal experience</div>
-        <div class="hint" style="margin-top:24px;font-size:10px;opacity:0.4">&copy; 2026 Eli Schwimmer</div>
-        <div class="hint" style="font-size:9px;opacity:0.3;margin-top:2px">Kneidels of Steel Technologies</div>
+        <div class="hint" style="margin-top:24px;opacity:0.4">&copy; 2026 Eli Schwimmer</div>
+        <div class="hint" style="opacity:0.3;margin-top:2px">Kneidels of Steel Technologies</div>
     </div>
 </div>
 

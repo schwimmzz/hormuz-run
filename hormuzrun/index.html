@@ -695,9 +695,16 @@ function resolveChoice(choiceIdx){
 //  UPDATE FUNCTIONS
 // ============================================================
 
+function tryFullscreen() {
+    if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(err => console.log(err));
+    }
+}
+
 function updateTitle(dt){
     game.titlePulse += dt;
     if(keys['enter']||keys[' ']||mouseClick){
+        tryFullscreen();
         game.screen = 'flagSelect';
         keys['enter']=false; keys[' ']=false; mouseClick=false;
     }

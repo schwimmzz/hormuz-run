@@ -726,8 +726,6 @@ function updateFlagSelect(dt){
         const pad = mob?10:20;
         const headSz = mob?16:22;
         const hdrBot = py+pad+headSz+10;
-        const panelH = mob ? ch*0.94 : Math.min(700, ch*0.92);
-        const panelW = mob ? cw*0.94 : Math.min(720, cw*0.9);
         const rowH = mob ? Math.max(28, panelH*0.065) : Math.max(35, panelH*0.065);
         const listTop = hdrBot+(mob?6:10);
         const listW = mob ? panelW : panelW*0.5;
@@ -894,7 +892,7 @@ function updateEncounter(dt){
         if(mouseClick && enc._choiceYs){
             const mob = cw<600;
             const pad = mob?12:20;
-            const choiceH = Math.max(28, panelH*0.07);
+            const choiceH = Math.max(28, ch*0.06);
             const panelW = mob ? cw*0.94 : Math.min(620, cw*0.82);
             const px = (cw-panelW)/2;
             for(let i=0;i<5;i++){
@@ -1522,9 +1520,7 @@ function renderEncounter(){
     const fs = Math.max(11, Math.min(16, panelW*0.035));
     const fsH = Math.max(11, Math.min(18, panelW*0.04));
     const lineH = fs+5;
-    const panelH = Math.min(Math.max(100,200), ch*0.92);
-            const panelW = mob ? cw*0.94 : Math.min(620, cw*0.82);
-            const choiceH = Math.max(28, panelH*0.07);
+    const choiceH = Math.max(28, ch*0.06);
     const pad = mob?12:20;
     const panelW = mob ? cw*0.94 : Math.min(620, cw*0.82);
     const textW = panelW-pad*2;

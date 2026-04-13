@@ -1931,7 +1931,7 @@ function renderFlagSelect(){
     ctx.fillStyle = '#050d08';
     ctx.fillRect(0,0,cw,ch);
 
-    const mob = cw < 600 || ch < 500;
+    const mob = cw<600;
     const panelW = mob ? cw*0.94 : Math.min(720, cw*0.9);
     const panelH = mob ? ch*0.94 : Math.min(700, ch*0.92);
     const px = (cw-panelW)/2;
@@ -2257,7 +2257,7 @@ function renderGameplay(){
         const col = game.flag.key==='iran' ? `rgba(170,102,255,${alpha})` : `rgba(100,180,120,${alpha})`;
         const rxOff = isMobileDevice() ? (dpadCx + dpadR + 15) : 0;
         const rxCenter = rxOff + (cw - rxOff) / 2;
-        drawText(game.radioMsg, rxCenter, ch-30, {size:12, align:'center', color:col, glow:4});
+        drawText(game.radioMsg, rxCenter, ch-70, {size:12, align:'center', color:col, glow:4});
     }
 
     drawScanlines();

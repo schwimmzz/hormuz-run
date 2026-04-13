@@ -103,6 +103,7 @@ canvas{display:block;cursor:crosshair;image-rendering:auto;position:fixed;top:0;
 </style>
 </head>
 <body>
+<audio id="bg-music" src="theme.mp3" preload="auto" loop></audio>
 
 <!-- Fullscreen gate overlay -->
 <div id="fs-gate">
@@ -135,7 +136,7 @@ canvas{display:block;cursor:crosshair;image-rendering:auto;position:fixed;top:0;
 
 const SFX = {
     ctx: null,
-    musicEl: new Audio('theme.mp3'),
+    musicEl: document.getElementById('bg-music'),
     musicVol: 0.35,
     masterVol: 0.6,
     muted: false,

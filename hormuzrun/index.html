@@ -103,7 +103,7 @@ canvas{display:block;cursor:crosshair;image-rendering:auto;position:fixed;top:0;
 </style>
 </head>
 <body>
-<audio id="bg-music" src="theme.mp3" preload="auto" loop></audio>
+<!-- music loaded via fetch + Web Audio decodeAudioData for mobile compat -->
 
 <!-- Fullscreen gate overlay -->
 <div id="fs-gate">
@@ -136,12 +136,49 @@ canvas{display:block;cursor:crosshair;image-rendering:auto;position:fixed;top:0;
 
 const SFX = {
     ctx: null,
-    musicEl: document.getElementById('bg-music'),
     musicGain: null,
     musicVol: 0.35,
     masterVol: 0.6,
     muted: false,
     _wantMusic: false,
+    _musicBuffer: null,
+    _musicSource: null,
+    _musicPlaying: false,
+    _musicRaw: null,
+
+    // Pre-fetch MP3 bytes at page load (no gesture needed for fetch)
+    prefetch() {
+        fetch('theme.mp3')
+            .then(r => r.arrayBuffer())
+            .then(ab => {
+                this._musicRaw = ab;
+                // If AudioContext already exists, decode now
+                if (this.ctx && !this._musicBuffer) this._decode();
+            })
+            .catch(e => console.log('Music fetch error:', e));
+    },
+
+    _decode() {
+        if (!this._musicRaw || !this.ctx || this._musicBuffer) return;
+        // slice() because decodeAudioData detaches the buffer
+        this.ctx.decodeAudioData(this._musicRaw.slice(0))
+            .then(buf => {
+                this._musicBuffer = buf;
+                if (this._wantMusic && !this._musicPlaying) this._startSource();
+            })
+            .catch(e => console.log('Music decode error:', e));
+    },
+
+    _startSource() {
+        if (!this._musicBuffer || !this.ctx) return;
+        if (this._musicSource) { try { this._musicSource.stop(); } catch(e) {} }
+        this._musicSource = this.ctx.createBufferSource();
+        this._musicSource.buffer = this._musicBuffer;
+        this._musicSource.loop = true;
+        this._musicSource.connect(this.musicGain);
+        this._musicSource.start(0);
+        this._musicPlaying = true;
+    },
 
     init() {
         if (this.ctx) return;
@@ -150,13 +187,12 @@ const SFX = {
         this.master.gain.value = this.masterVol;
         this.master.connect(this.ctx.destination);
 
-        // Route music through Web Audio API so ctx.resume() covers everything.
-        // This avoids the HTML5 Audio vs AudioContext split that breaks on mobile.
         this.musicGain = this.ctx.createGain();
         this.musicGain.gain.value = this.musicVol;
         this.musicGain.connect(this.ctx.destination);
-        this.ctx.createMediaElementSource(this.musicEl).connect(this.musicGain);
-        this.musicEl.loop = true;
+
+        // Decode pre-fetched music bytes if available
+        if (this._musicRaw && !this._musicBuffer) this._decode();
     },
 
     resume() {
@@ -165,17 +201,16 @@ const SFX = {
 
     // ---- Music controls ----
     playMusic() {
-        if (!this.musicEl) return;
         this._wantMusic = true;
-        if (this.musicEl.paused) {
-            this.musicEl.play().catch(() => {});
-        }
+        if (!this._musicPlaying && this._musicBuffer) this._startSource();
     },
     stopMusic() {
-        if (!this.musicEl) return;
         this._wantMusic = false;
-        this.musicEl.pause();
-        this.musicEl.currentTime = 0;
+        this._musicPlaying = false;
+        if (this._musicSource) {
+            try { this._musicSource.stop(); } catch(e) {}
+            this._musicSource = null;
+        }
     },
     fadeMusic(vol, dur) {
         if (!this.musicGain) return;
@@ -414,6 +449,8 @@ const SFX = {
         this._engineOsc = null;
     },
 };
+// Start downloading theme.mp3 immediately (no gesture needed for fetch)
+SFX.prefetch();
 
 let cw = 0, ch = 0, dpr = 1;
 const canvas = document.getElementById('c');

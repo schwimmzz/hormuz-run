@@ -13,9 +13,112 @@
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:100%;height:100%;overflow:hidden;background:#000;position:fixed;top:0;left:0}
 canvas{display:block;cursor:crosshair;image-rendering:auto;position:fixed;top:0;left:0}
+
+/* ---- Fullscreen Gate Overlay ---- */
+#fs-gate {
+    position:fixed; top:0; left:0; width:100%; height:100%;
+    background:#0a1628;
+    display:flex; flex-direction:column;
+    justify-content:center; align-items:center;
+    z-index:1000;
+    font-family:'Courier New','Consolas',monospace;
+    touch-action:manipulation;
+}
+#fs-gate.hidden { display:none; }
+
+/* Portrait: rotate message */
+#fs-rotate {
+    display:none;
+    flex-direction:column;
+    align-items:center;
+    gap:16px;
+}
+#fs-rotate .icon {
+    font-size:48px;
+    animation: rock 1.5s ease-in-out infinite;
+}
+@keyframes rock {
+    0%,100% { transform: rotate(0deg); }
+    25% { transform: rotate(90deg); }
+    75% { transform: rotate(90deg); }
+}
+#fs-rotate .msg {
+    color:#ff3333;
+    font-size:18px;
+    font-weight:bold;
+    letter-spacing:2px;
+}
+#fs-rotate .sub {
+    color:#33ff88;
+    font-size:12px;
+}
+
+/* Landscape: fullscreen button */
+#fs-prompt {
+    display:none;
+    flex-direction:column;
+    align-items:center;
+    gap:24px;
+}
+#fs-prompt .title {
+    color:#33ff88;
+    font-size:28px;
+    font-weight:bold;
+    letter-spacing:4px;
+    text-shadow: 0 0 20px rgba(51,255,136,0.4);
+}
+#fs-prompt .sub {
+    color:#557755;
+    font-size:11px;
+    letter-spacing:2px;
+}
+#fs-btn {
+    background:none;
+    border:2px solid #33ff88;
+    color:#33ff88;
+    font-family:'Courier New','Consolas',monospace;
+    font-size:18px;
+    font-weight:bold;
+    letter-spacing:3px;
+    padding:16px 48px;
+    cursor:pointer;
+    text-transform:uppercase;
+    transition: all 0.2s;
+    animation: pulse-border 2s infinite;
+}
+#fs-btn:active {
+    background:#33ff88;
+    color:#000;
+}
+@keyframes pulse-border {
+    0%,100% { box-shadow: 0 0 8px rgba(51,255,136,0.3); }
+    50% { box-shadow: 0 0 20px rgba(51,255,136,0.6); }
+}
+#fs-prompt .hint {
+    color:#336644;
+    font-size:9px;
+    letter-spacing:1px;
+    margin-top:8px;
+}
 </style>
 </head>
 <body>
+
+<!-- Fullscreen gate overlay -->
+<div id="fs-gate">
+    <div id="fs-rotate">
+        <div class="icon">📱</div>
+        <div class="msg">ROTATE DEVICE</div>
+        <div class="sub">Landscape required for transit.</div>
+    </div>
+    <div id="fs-prompt">
+        <div class="title">HORMUZ RUN</div>
+        <div class="sub">// A Strait of Hormuz Transit Simulation</div>
+        <button id="fs-btn">▶ ENTER GAME</button>
+        <div class="hint">Fullscreen recommended for optimal experience</div>
+    </div>
+</div>
+
 <canvas id="c"></canvas>
 <script>
 'use strict';
@@ -1906,13 +2009,11 @@ function update(dt){
 }
 
 function render(){
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // ensure transform is set for each frame
-    if(cw < ch && cw < 800){
-        ctx.fillStyle = '#0a1628';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // If gate is visible, just clear canvas
+    if(!gameStarted) {
+        ctx.fillStyle = '#000';
         ctx.fillRect(0,0,cw,ch);
-        drawText('PLEASE ROTATE DEVICE', cw/2, ch/2-20, {size: cw*0.06, align:'center', color:'#ff3333', bold:true, glow:10});
-        drawText('Landscape required for optimal transit.', cw/2, ch/2+30, {size: cw*0.035, align:'center', color:'#33ff88'});
-        ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset for next frame just in case
         return;
     }
     ctx.save();
@@ -1942,8 +2043,82 @@ function loop(time){
     requestAnimationFrame(loop);
 }
 
+// ============================================================
+//  FULLSCREEN GATE LOGIC
+// ============================================================
+
+let gameStarted = false;
+const fsGate = document.getElementById('fs-gate');
+const fsRotate = document.getElementById('fs-rotate');
+const fsPrompt = document.getElementById('fs-prompt');
+const fsBtn = document.getElementById('fs-btn');
+
+function isMobileDevice() {
+    return /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+        || ('ontouchstart' in window)
+        || (navigator.maxTouchPoints > 0);
+}
+
+function isPortrait() {
+    return window.innerWidth < window.innerHeight && window.innerWidth < 800;
+}
+
+function updateGateUI() {
+    if (gameStarted) {
+        fsGate.classList.add('hidden');
+        return;
+    }
+    if (!isMobileDevice()) {
+        // Desktop: skip gate entirely, go straight to game
+        gameStarted = true;
+        fsGate.classList.add('hidden');
+        return;
+    }
+    fsGate.classList.remove('hidden');
+    if (isPortrait()) {
+        fsRotate.style.display = 'flex';
+        fsPrompt.style.display = 'none';
+    } else {
+        fsRotate.style.display = 'none';
+        fsPrompt.style.display = 'flex';
+    }
+}
+
+// Button click → fullscreen + start game
+fsBtn.addEventListener('click', function() {
+    // Request fullscreen from this genuine user gesture
+    const el = document.documentElement;
+    const rfs = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+    if (rfs) {
+        rfs.call(el).catch(()=>{});
+    }
+    // Lock landscape
+    try {
+        if (screen.orientation && screen.orientation.lock) {
+            screen.orientation.lock('landscape').catch(()=>{});
+        }
+    } catch(e) {}
+    // Start game
+    gameStarted = true;
+    fsGate.classList.add('hidden');
+    resize();
+});
+
+// Also handle tapping the overlay itself as a fallback
+fsBtn.addEventListener('touchend', function(e) {
+    e.preventDefault();
+    fsBtn.click();
+});
+
+// Listen for orientation changes to update gate UI
+window.addEventListener('resize', updateGateUI);
+if (screen.orientation) {
+    screen.orientation.addEventListener('change', updateGateUI);
+}
+
 // ---- Init ----
 initGame();
+updateGateUI();
 requestAnimationFrame(loop);
 
 </script>

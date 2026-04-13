@@ -2789,19 +2789,14 @@ function updateGateUI() {
         return;
     }
     if (!isMobileDevice()) {
-        // Desktop: skip gate entirely, go straight to game
         gameStarted = true;
         fsGate.classList.add('hidden');
         return;
     }
+    // Show prompt immediately in any orientation — button tap forces landscape
     fsGate.classList.remove('hidden');
-    if (isPortrait()) {
-        fsRotate.style.display = 'flex';
-        fsPrompt.style.display = 'none';
-    } else {
-        fsRotate.style.display = 'none';
-        fsPrompt.style.display = 'flex';
-    }
+    fsRotate.style.display = 'none';
+    fsPrompt.style.display = 'flex';
 }
 
 // Button click → fullscreen + start game
@@ -2810,18 +2805,17 @@ fsBtn.addEventListener('click', function() {
     SFX.resume();
     SFX.playMusic();
     desktopAudioInit = true;
-    // Request fullscreen from this genuine user gesture
+    // Request fullscreen, then lock landscape once granted
     const el = document.documentElement;
     const rfs = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-    if (rfs) {
-        rfs.call(el).catch(()=>{});
+    function lockLandscape() {
+        try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(()=>{}); } catch(e) {}
     }
-    // Lock landscape
-    try {
-        if (screen.orientation && screen.orientation.lock) {
-            screen.orientation.lock('landscape').catch(()=>{});
-        }
-    } catch(e) {}
+    if (rfs) {
+        rfs.call(el).then(lockLandscape).catch(()=>{ lockLandscape(); });
+    } else {
+        lockLandscape();
+    }
     // Start game
     gameStarted = true;
     fsGate.classList.add('hidden');

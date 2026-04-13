@@ -1170,20 +1170,24 @@ function processDpadTouches(touches) {
     clearDpad();
     for (let i = 0; i < touches.length; i++) {
         const t = touches[i];
-        const dir = hitTestDpad(t.clientX, t.clientY);
-        if (dir && game && game.dpad) {
-            if (dir === 'up') game.dpad.up = true;
-            if (dir === 'down') game.dpad.down = true;
-            if (dir === 'left') game.dpad.left = true;
-            if (dir === 'right') game.dpad.right = true;
-            // Track finger offset for knob, clamped to outer ring
-            const dx = t.clientX - dpadCx, dy = t.clientY - dpadCy;
-            const d = Math.sqrt(dx * dx + dy * dy);
-            const maxD = dpadR * 0.65;
-            const clamp = d > maxD ? maxD / d : 1;
-            dpadKnobX = dx * clamp;
-            dpadKnobY = dy * clamp;
-        }
+        const dx = t.clientX - dpadCx, dy = t.clientY - dpadCy;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d > dpadR * 1.3) continue; // outside pad
+        if (!game || !game.dpad) continue;
+
+        // Axis-based input — allows diagonal (steer + speed at once)
+        const nx = dx / dpadR, ny = dy / dpadR;
+        const deadzone = 0.25;
+        if (nx > deadzone) game.dpad.right = true;
+        if (nx < -deadzone) game.dpad.left = true;
+        if (ny > deadzone) game.dpad.down = true;
+        if (ny < -deadzone) game.dpad.up = true;
+
+        // Track finger offset for knob visual
+        const maxD = dpadR * 0.65;
+        const clampF = d > maxD ? maxD / d : 1;
+        dpadKnobX = dx * clampF;
+        dpadKnobY = dy * clampF;
     }
 }
 
@@ -1604,7 +1608,7 @@ function updateFlagSelect(dt){
     }
     // Mouse / tap on flag row
     if(mouseClick){
-        const mob = cw<600||ch<500;
+        const mob = cw<600;
         const panelW = mob ? cw*0.94 : Math.min(720, cw*0.9);
         const panelH = mob ? ch*0.94 : Math.min(700, ch*0.92);
         const px = (cw-panelW)/2;
@@ -1822,7 +1826,7 @@ function updateEncounter(dt){
         }
         // Mouse / tap on choices
         if(mouseClick && enc._choiceYs){
-            const mob = cw<600||ch<500;
+            const mob = cw<600;
             const pad = mob?12:20;
             const choiceH = Math.max(28, ch*0.06);
             const panelW = mob ? cw*0.94 : Math.min(620, cw*0.82);
@@ -1911,7 +1915,7 @@ function renderTitle(){
     drawText('RUN', cx, cy+ch*0.03, {size:Math.min(72,cw*0.1), align:'center', color:C_GREEN, bold:true, glow:20, baseline:'middle'});
 
     // Subtitle
-    const mob = cw<600||ch<500;
+    const mob = cw<600;
     drawText('Navigate. Survive. Profit.', cx, cy+65, {size:mob?12:16, align:'center', color:C_GREEN_DIM, baseline:'middle'});
 
     // Prompt
@@ -2005,7 +2009,7 @@ function renderBriefing(){
     ctx.fillRect(0,0,cw,ch);
 
     const f = game.flag;
-    const mob = cw<600||ch<500;
+    const mob = cw<600;
     const panelW = Math.min(550, cw*(mob?0.94:0.85));
     const px = (cw-panelW)/2;
     const cy = ch/2;
@@ -2247,11 +2251,13 @@ function renderGameplay(){
     // HUD
     renderHUD();
 
-    // Radio chatter
+    // Radio chatter (offset right on mobile to clear D-pad)
     if(game.radioMsg){
         const alpha = Math.min(1, game.radioTimer/2);
         const col = game.flag.key==='iran' ? `rgba(170,102,255,${alpha})` : `rgba(100,180,120,${alpha})`;
-        drawText(game.radioMsg, cw/2, ch-70, {size:13, align:'center', color:col, glow:4});
+        const rxOff = isMobileDevice() ? (dpadCx + dpadR + 15) : 0;
+        const rxCenter = rxOff + (cw - rxOff) / 2;
+        drawText(game.radioMsg, rxCenter, ch-30, {size:12, align:'center', color:col, glow:4});
     }
 
     drawScanlines();
@@ -2396,7 +2402,7 @@ function renderCoastlines(){
 
 function renderHUD(){
     const f = game.flag;
-    const mob = cw<600||ch<500;
+    const mob = cw<600;
     const pad = mob?8:15;
 
     // Flag
@@ -2517,7 +2523,7 @@ function renderEncounter(){
     ctx.fillRect(0,0,cw,ch);
 
     const enc = game.encounter;
-    const mob = cw<600||ch<500;
+    const mob = cw<600;
     const fs = Math.max(11, Math.min(16, panelW*0.035));
     const fsH = Math.max(11, Math.min(18, panelW*0.04));
     const lineH = fs+5;
@@ -2597,7 +2603,7 @@ function renderGameOver(){
     ctx.fillRect(0,0,cw,ch);
 
     const f = game.flag;
-    const mob = cw<600||ch<500;
+    const mob = cw<600;
     const panelW = mob ? cw*0.94 : Math.min(650, cw*0.88);
     const px = (cw-panelW)/2;
     const pad = mob?10:15;

@@ -140,6 +140,7 @@ const SFX = {
     musicVol: 0.35,
     masterVol: 0.6,
     muted: false,
+    _wantMusic: false,
 
     init() {
         if (this.ctx) return;
@@ -151,6 +152,8 @@ const SFX = {
         // Theme music via HTML5 Audio
         this.musicEl.loop = true;
         this.musicEl.volume = this.musicVol;
+        // Mobile browsers ignore preload="auto" — force buffering within user gesture
+        this.musicEl.load();
     },
 
     resume() {
@@ -160,11 +163,25 @@ const SFX = {
     // ---- Music controls ----
     playMusic() {
         if (!this.musicEl) return;
+        this._wantMusic = true;
         this.musicEl.volume = this.musicVol;
-        if (this.musicEl.paused) { this.musicEl.play().catch(e => console.log('Music play error:', e)); }
+        if (this.musicEl.paused) {
+            const p = this.musicEl.play();
+            if (p && p.catch) {
+                p.catch(() => {
+                    // Audio not buffered yet — retry once it has enough data
+                    this.musicEl.addEventListener('canplay', () => {
+                        if (this._wantMusic && this.musicEl.paused) {
+                            this.musicEl.play().catch(() => {});
+                        }
+                    }, { once: true });
+                });
+            }
+        }
     },
     stopMusic() {
         if (!this.musicEl) return;
+        this._wantMusic = false;
         this.musicEl.pause();
         this.musicEl.currentTime = 0;
     },
@@ -2428,6 +2445,24 @@ window.addEventListener('resize', updateGateUI);
 if (screen.orientation) {
     screen.orientation.addEventListener('change', updateGateUI);
 }
+
+// ---- Resume audio after fullscreen transition or tab refocus ----
+// Entering/exiting fullscreen can suspend the AudioContext on mobile
+document.addEventListener('fullscreenchange', () => {
+    SFX.resume();
+    if (SFX._wantMusic) SFX.playMusic();
+});
+document.addEventListener('webkitfullscreenchange', () => {
+    SFX.resume();
+    if (SFX._wantMusic) SFX.playMusic();
+});
+// Tab visibility change (e.g. switching apps on mobile)
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && desktopAudioInit) {
+        SFX.resume();
+        if (SFX._wantMusic) SFX.playMusic();
+    }
+});
 
 // ---- Init ----
 initGame();

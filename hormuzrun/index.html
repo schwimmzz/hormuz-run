@@ -2409,11 +2409,6 @@ fsBtn.addEventListener('click', function() {
     resize();
 });
 
-// Also handle tapping the overlay itself as a fallback
-fsBtn.addEventListener('touchend', function(e) {
-    e.preventDefault();
-    fsBtn.click();
-});
 
 // Listen for orientation changes to update gate UI
 window.addEventListener('resize', updateGateUI);

@@ -45,6 +45,7 @@ function resize() {
         scale = ch / WORLD_H;
     }
     viewW = cw / scale;
+    if (typeof updateDpadGeom === 'function') updateDpadGeom();
 }
 
 // ---- Constants ----
@@ -64,6 +65,8 @@ const DRONE_DMG = 22;
 const DRONE_SPEED = 260;
 const DEBRIS_R = 18;
 const DEBRIS_DMG = 15;
+const LAND_DMG_PER_SEC = 25;
+const LAND_DMG_COOLDOWN = 0.3;
 const MAX_HP = 100;
 const ENCOUNTER_XS = [3800, 7500, 11200];
 const CARGO_BASE = 160000000;
@@ -318,6 +321,7 @@ let mouseX = 0, mouseY = 0, mouseClick = false;
 
 function initGame() {
     game = {
+        landDmgTimer: 0,
         screen: 'title',
         flagIdx: 0,
         flag: null,
@@ -339,6 +343,8 @@ function initGame() {
         touchActive: false,
         touchX: 0,
         touchY: 0,
+        // D-pad state
+        dpad: { up:false, down:false, left:false, right:false },
     };
     player = { x:0, y:0, vx:0, vy:0, hp:MAX_HP, angle:0, tollsPaid:0, alive:true };
     camera = { x:0 };
@@ -362,19 +368,69 @@ window.addEventListener('click', e => {
     mouseClick = true; mouseX = e.clientX; mouseY = e.clientY;
     if (typeof tryFullscreen === 'function' && game && game.screen === 'title') tryFullscreen();
 });
+// ---- D-Pad geometry (computed after resize) ----
+let dpadCx = 0, dpadCy = 0, dpadR = 0, dpadInnerR = 0;
+function updateDpadGeom() {
+    dpadR = Math.min(65, Math.max(40, ch * 0.15));
+    dpadInnerR = dpadR * 0.38;
+    dpadCx = dpadR + 25;
+    dpadCy = ch - dpadR - 25;
+}
+
+function hitTestDpad(tx, ty) {
+    const dx = tx - dpadCx, dy = ty - dpadCy;
+    const d = Math.sqrt(dx*dx + dy*dy);
+    if (d > dpadR * 1.3) return null; // outside
+    if (d < dpadInnerR) return 'center';
+    const angle = Math.atan2(dy, dx);
+    if (angle > -Math.PI/4 && angle <= Math.PI/4) return 'right';
+    if (angle > Math.PI/4 && angle <= 3*Math.PI/4) return 'down';
+    if (angle > -3*Math.PI/4 && angle <= -Math.PI/4) return 'up';
+    return 'left';
+}
+
+function clearDpad() {
+    if (game && game.dpad) { game.dpad.up=false; game.dpad.down=false; game.dpad.left=false; game.dpad.right=false; }
+}
+
+function processDpadTouches(touches) {
+    clearDpad();
+    for (let i = 0; i < touches.length; i++) {
+        const t = touches[i];
+        const dir = hitTestDpad(t.clientX, t.clientY);
+        if (dir && game && game.dpad) {
+            if (dir === 'up') game.dpad.up = true;
+            if (dir === 'down') game.dpad.down = true;
+            if (dir === 'left') game.dpad.left = true;
+            if (dir === 'right') game.dpad.right = true;
+        }
+    }
+}
+
 canvas.addEventListener('touchstart', e => {
-    e.preventDefault(); const t=e.touches[0];
-    mouseX=t.clientX; mouseY=t.clientY; mouseClick=true;
-    game.touchActive=true; game.touchX=t.clientX; game.touchY=t.clientY;
-    // Fullscreen must be triggered from a real user gesture
+    e.preventDefault();
+    const t = e.touches[0];
+    mouseX = t.clientX; mouseY = t.clientY; mouseClick = true;
+    game.touchActive = true; game.touchX = t.clientX; game.touchY = t.clientY;
     if (typeof tryFullscreen === 'function' && game && game.screen === 'title') tryFullscreen();
+    if (game.screen === 'gameplay') processDpadTouches(e.touches);
 }, {passive:false});
 canvas.addEventListener('touchmove', e => {
-    e.preventDefault(); const t=e.touches[0];
-    mouseX=t.clientX; mouseY=t.clientY;
-    game.touchX=t.clientX; game.touchY=t.clientY;
+    e.preventDefault();
+    const t = e.touches[0];
+    mouseX = t.clientX; mouseY = t.clientY;
+    game.touchX = t.clientX; game.touchY = t.clientY;
+    if (game.screen === 'gameplay') processDpadTouches(e.touches);
 }, {passive:false});
-canvas.addEventListener('touchend', e => { e.preventDefault(); game.touchActive=false; }, {passive:false});
+canvas.addEventListener('touchend', e => {
+    e.preventDefault();
+    game.touchActive = false;
+    if (e.touches.length > 0) {
+        processDpadTouches(e.touches);
+    } else {
+        clearDpad();
+    }
+}, {passive:false});
 window.addEventListener('resize', resize);
 resize();
 
@@ -527,7 +583,7 @@ function generateMap(){
             const rr = r * rand(0.5,1.0);
             pts.push({dx:Math.cos(a)*rr, dy:Math.sin(a)*rr});
         }
-        islets.push({ x:wx, y:coastY+offset, pts });
+        islets.push({ x:wx, y:coastY+offset, pts, r });
     }
 
     // Docks / piers — extend from coastlines
@@ -791,13 +847,11 @@ function updateGameplay(dt){
     let vi = 0;
     if(keys['w']||keys['arrowup']) vi = -1;
     if(keys['s']||keys['arrowdown']) vi = 1;
-    // Touch steering
-    if(game.touchActive){
-        vi = clamp((game.touchY - ch*0.5) / (ch*0.25), -1, 1);
-        const dx = (game.touchX - cw*0.5) / (cw*0.25);
-        if(dx>0.2) targetVX += SPEED_BOOST * Math.min(1,dx);
-        if(dx<-0.2) targetVX -= SPEED_BRAKE * Math.min(1,-dx);
-    }
+    // D-pad steering (mobile)
+    if(game.dpad.up) vi = -1;
+    if(game.dpad.down) vi = 1;
+    if(game.dpad.right) targetVX += SPEED_BOOST;
+    if(game.dpad.left) targetVX -= SPEED_BRAKE;
     player.vy += vi*VERT_ACCEL*dt;
     player.vy *= Math.max(0, 1-VERT_DRAG*dt);
     player.vy = clamp(player.vy, -MAX_VY, MAX_VY);
@@ -805,11 +859,51 @@ function updateGameplay(dt){
     player.x += player.vx*dt;
     player.y += player.vy*dt;
 
-    // Clamp to water
+    // Clamp to water + LAND COLLISION DAMAGE
     const top = waterTop(player.x)+PLAYER_R;
     const bot = waterBot(player.x)-PLAYER_R;
-    if(player.y < top){ player.y=top; player.vy=Math.abs(player.vy)*0.2; }
-    if(player.y > bot){ player.y=bot; player.vy=-Math.abs(player.vy)*0.2; }
+    game.landDmgTimer -= dt;
+    let hitLand = false;
+    if(player.y < top){ player.y=top; player.vy=Math.abs(player.vy)*0.2; hitLand=true; }
+    if(player.y > bot){ player.y=bot; player.vy=-Math.abs(player.vy)*0.2; hitLand=true; }
+
+    // Islet collision
+    for(const il of islets){
+        const d = dist(player.x, player.y, il.x, il.y);
+        if(d < PLAYER_R + il.r){
+            hitLand = true;
+            // Push player out
+            const angle = Math.atan2(player.y - il.y, player.x - il.x);
+            player.x = il.x + Math.cos(angle)*(PLAYER_R + il.r + 1);
+            player.y = il.y + Math.sin(angle)*(PLAYER_R + il.r + 1);
+            player.vy *= -0.3;
+        }
+    }
+
+    // Dock collision
+    for(const dk of docks){
+        const dockEndY = dk.coastY + dk.dir * dk.len;
+        const dockMinY = Math.min(dk.coastY, dockEndY);
+        const dockMaxY = Math.max(dk.coastY, dockEndY);
+        const hw = dk.width * 0.5 + PLAYER_R;
+        if(player.x > dk.x - hw && player.x < dk.x + hw && player.y > dockMinY - PLAYER_R && player.y < dockMaxY + PLAYER_R){
+            hitLand = true;
+            // Push away horizontally
+            if(player.x < dk.x) player.x = dk.x - hw - 1;
+            else player.x = dk.x + hw + 1;
+        }
+    }
+
+    // Apply land damage with cooldown
+    if(hitLand && game.landDmgTimer <= 0){
+        const dmg = Math.round(LAND_DMG_PER_SEC * LAND_DMG_COOLDOWN);
+        player.hp = Math.max(0, player.hp - dmg);
+        game.damageFlash = 0.6;
+        game.screenShake = 2;
+        spawnParticles(player.x, player.y, 6, '#aa8855', 50, 2);
+        game.landDmgTimer = LAND_DMG_COOLDOWN;
+        if(player.hp<=0){ player.alive=false; spawnParticles(player.x,player.y,40,'#ff6600',120,5); setTimeout(()=>triggerGameOver(false),1500); return; }
+    }
 
     // Visual angle
     player.angle = Math.atan2(player.vy, player.vx)*0.25;
@@ -1536,6 +1630,71 @@ function renderHUD(){
     if(!mob) drawText('DIST: '+Math.round(player.x)+' / '+(MAP_W-300), cw-pad, ch-35, {size:10, color:'#336633', align:'right'});
     const mins=Math.floor(game.gameTime/60), secs=Math.floor(game.gameTime%60);
     drawText(String(mins).padStart(2,'0')+':'+String(secs).padStart(2,'0'), cw-pad, ch-(mob?10:20), {size:mob?9:11, color:'#557755', align:'right'});
+
+    // ---- Virtual D-Pad (mobile only) ----
+    if(mob && dpadR > 0){
+        const cx = dpadCx, cy = dpadCy, r = dpadR, ir = dpadInnerR;
+        const dp = game.dpad;
+
+        // Outer ring
+        ctx.save();
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = '#333';
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = '#555';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.stroke();
+
+        // Segment dividers (cross lines)
+        ctx.strokeStyle = '#222';
+        ctx.lineWidth = 1.5;
+        for(let i = 0; i < 4; i++){
+            const a = Math.PI/4 + i * Math.PI/2;
+            ctx.beginPath();
+            ctx.moveTo(cx + Math.cos(a)*ir*0.8, cy + Math.sin(a)*ir*0.8);
+            ctx.lineTo(cx + Math.cos(a)*r*0.95, cy + Math.sin(a)*r*0.95);
+            ctx.stroke();
+        }
+
+        // Directional arrows
+        ctx.globalAlpha = 0.7;
+        const arrowDist = (r + ir) * 0.52;
+        const arrowSz = r * 0.18;
+        const dirs = [
+            {dir:'up',    ax:0,  ay:-arrowDist, rot:-Math.PI/2, active:dp.up},
+            {dir:'down',  ax:0,  ay:arrowDist,  rot:Math.PI/2,  active:dp.down},
+            {dir:'left',  ax:-arrowDist, ay:0, rot:Math.PI,     active:dp.left},
+            {dir:'right', ax:arrowDist,  ay:0, rot:0,           active:dp.right},
+        ];
+        for(const d of dirs){
+            ctx.save();
+            ctx.translate(cx + d.ax, cy + d.ay);
+            ctx.rotate(d.rot);
+            ctx.fillStyle = d.active ? '#fff' : '#aaa';
+            ctx.globalAlpha = d.active ? 0.9 : 0.5;
+            // Arrow triangle
+            ctx.beginPath();
+            ctx.moveTo(arrowSz, 0);
+            ctx.lineTo(-arrowSz*0.6, -arrowSz*0.7);
+            ctx.lineTo(-arrowSz*0.6, arrowSz*0.7);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+        }
+
+        // Center knob
+        ctx.globalAlpha = 0.5;
+        const kGrad = ctx.createRadialGradient(cx, cy-ir*0.15, 0, cx, cy, ir);
+        kGrad.addColorStop(0, '#999');
+        kGrad.addColorStop(1, '#555');
+        ctx.fillStyle = kGrad;
+        ctx.beginPath(); ctx.arc(cx, cy, ir, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = '#666';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(cx, cy, ir, 0, Math.PI*2); ctx.stroke();
+
+        ctx.restore();
+    }
 }
 
 function renderEncounter(){

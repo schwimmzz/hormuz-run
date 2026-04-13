@@ -263,6 +263,16 @@ const SFX = {
 
     _musicBuffer: null,
     _bufSrc: null,
+    _musicRaw: null,
+    _musicDecoding: false,
+
+    prefetchMusic() {
+        const url = this.musicEl ? this.musicEl.getAttribute('src') : 'theme.mp3';
+        fetch(url).then(r => r.arrayBuffer()).then(buf => {
+            this._musicRaw = buf;
+            if (this.ctx && !this._musicBuffer) this._decodeMusicData();
+        }).catch(() => {});
+    },
 
     init() {
         if (this.ctx) return;
@@ -276,17 +286,22 @@ const SFX = {
         this.musicGain.gain.value = this.musicVol;
         this.musicGain.connect(this.ctx.destination);
 
-        // Decode music into a Web Audio buffer — completely bypasses <audio>
-        // element restrictions on mobile (AudioContext is already unlocked by SFX)
-        const url = this.musicEl ? this.musicEl.getAttribute('src') : 'theme.mp3';
-        fetch(url)
-            .then(r => r.arrayBuffer())
-            .then(buf => this.ctx.decodeAudioData(buf))
-            .then(decoded => {
+        // Decode pre-fetched music data if available
+        if (this._musicRaw && !this._musicBuffer) this._decodeMusicData();
+    },
+
+    _decodeMusicData() {
+        if (this._musicDecoding || this._musicBuffer || !this._musicRaw || !this.ctx) return;
+        this._musicDecoding = true;
+        // Callback form of decodeAudioData for maximum mobile compatibility
+        this.ctx.decodeAudioData(this._musicRaw.slice(0),
+            (decoded) => {
                 this._musicBuffer = decoded;
+                this._musicDecoding = false;
                 if (this._wantMusic && !this._bufSrc) this._startBuffer();
-            })
-            .catch(() => {});
+            },
+            () => { this._musicDecoding = false; }
+        );
     },
 
     _startBuffer() {
@@ -311,7 +326,10 @@ const SFX = {
             this.musicGain.gain.cancelScheduledValues(this.ctx.currentTime);
             this.musicGain.gain.value = this.musicVol;
         }
-        if (!this._bufSrc && this._musicBuffer) this._startBuffer();
+        if (!this._bufSrc) {
+            if (this._musicBuffer) this._startBuffer();
+            else if (!this._musicDecoding) this._decodeMusicData();
+        }
     },
     stopMusic() {
         this._wantMusic = false;
@@ -1226,6 +1244,7 @@ const DARK_FAIL = [
 // ---- Game State ----
 let game, player, camera, obstacles, drones, particles, encounterZones, islets, docks;
 let _deathTimeout = null;
+let _shareBtn = {x:0,y:0,w:0,h:0};
 const keys = {};
 let mouseX = 0, mouseY = 0, mouseClick = false;
 
@@ -1999,15 +2018,41 @@ function updateEncounter(dt){
     }
 }
 
+function shareResult(){
+    const f = game.flag;
+    const url = window.location.origin + window.location.pathname;
+    let lines = 'HORMUZ RUN \u{1F6A2}\n\n';
+    lines += '\u201C' + game.headline + '\u201D\n\n';
+    if(f.key==='iran'){
+        lines += f.emoji+' Iran \u2014 $0. Vibes: Immaculate.';
+    } else if(game.survived){
+        lines += f.emoji+' '+f.name+' ('+f.diff+') \u2014 '+fmtMoney(game.score);
+    } else {
+        lines += f.emoji+' '+f.name+' \u2014 Sunk at '+Math.round(game.transitPct*100)+'%';
+    }
+    if(navigator.share){
+        navigator.share({text:lines+'\n\n', url:url}).catch(()=>{});
+    } else {
+        window.open('https://x.com/intent/tweet?text='+encodeURIComponent(lines)+'&url='+encodeURIComponent(url),'_blank');
+    }
+    SFX.blip();
+}
+
 function updateGameOver(dt){
     game.overTimer += dt;
     if(game.overTimer>1){
+        if(keys['x']){ keys['x']=false; shareResult(); }
         if(keys['r']){ keys['r']=false; startTransit(); }
         if(keys['f']){ keys['f']=false; game.screen='flagSelect'; }
-        // Tap support: left half = retry, right half = change flag
         if(mouseClick){
-            if(mouseX < cw/2) startTransit();
-            else game.screen='flagSelect';
+            // Share button hit test first
+            if(mouseX>_shareBtn.x && mouseX<_shareBtn.x+_shareBtn.w && mouseY>_shareBtn.y && mouseY<_shareBtn.y+_shareBtn.h){
+                shareResult();
+            } else if(mouseX < cw/2){
+                startTransit();
+            } else {
+                game.screen='flagSelect';
+            }
             mouseClick=false;
         }
     }
@@ -2825,11 +2870,26 @@ function renderGameOver(){
 
     ctx.strokeStyle='#1a5533';
     ctx.beginPath(); ctx.moveTo(px,yy); ctx.lineTo(px+panelW,yy); ctx.stroke();
-    yy+=mob?16:25;
+    yy+=mob?10:18;
 
     if(game.overTimer>1){
-        const txt = mob ? '\u25C0 Tap left: Again    Tap right: Flags \u25B6' : '[R] Try Again   [F] Change Flag';
-        drawText(txt, cw/2, yy, {size:mob?11:14, align:'center', color:C_GREEN, glow:4});
+        // Share button
+        const btnW = mob?110:170, btnH = mob?26:34;
+        const btnX = cw/2-btnW/2, btnY = yy;
+        _shareBtn = {x:btnX, y:btnY, w:btnW, h:btnH};
+        const hover = mouseX>btnX && mouseX<btnX+btnW && mouseY>btnY && mouseY<btnY+btnH;
+        ctx.strokeStyle = hover?C_GREEN:C_GREEN_DIM; ctx.lineWidth=1.5;
+        ctx.strokeRect(btnX,btnY,btnW,btnH);
+        if(hover){ ctx.fillStyle='rgba(51,255,136,0.08)'; ctx.fillRect(btnX,btnY,btnW,btnH); }
+        drawText(mob?'SHARE':'\u25B6 SHARE RESULT [X]', cw/2, btnY+btnH/2, {size:mob?11:13, align:'center', color:hover?C_GREEN:C_GREEN_DIM, bold:true, baseline:'middle'});
+        yy += btnH+(mob?6:12);
+
+        if(mob){
+            drawText('\u25C0 Again', px+pad+5, yy, {size:10, color:C_GREEN_DIM});
+            drawText('Flags \u25B6', px+panelW-pad-5, yy, {size:10, color:C_GREEN_DIM, align:'right'});
+        } else {
+            drawText('[R] Try Again   [F] Change Flag', cw/2, yy, {size:14, align:'center', color:C_GREEN, glow:4});
+        }
     }
 
     ctx.globalAlpha=1;
@@ -2993,6 +3053,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // ---- Init ----
+SFX.prefetchMusic();
 initGame();
 updateGateUI();
 requestAnimationFrame(loop);

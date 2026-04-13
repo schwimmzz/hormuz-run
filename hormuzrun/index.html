@@ -838,6 +838,131 @@ const FLAGS = [
     },
 ];
 
+// ---- Radio Chatter (ambient messages by flag) ----
+const RADIO = {
+    // General messages (any flag, any time)
+    _general: [
+        "Currents shifting. Adjust heading.  — BRIDGE",
+        "Sea state 2. Visibility good.  — BRIDGE",
+        "Multiple radar contacts ahead. Maintaining course.  — CIC",
+        "Shipping lane traffic nominal.  — VTS HORMUZ",
+        "Water depth holding at 80m.  — NAV",
+        "Wind south-southeast at 12 knots.  — BRIDGE",
+        "All stations, this is VTS Hormuz. Maintain separation.  — VTS HORMUZ",
+        "Oil slick spotted port side. Steer clear.  — LOOKOUT",
+        "Small craft activity on the horizon.  — RADAR",
+        "Strait traffic density: moderate.  — VTS HORMUZ",
+    ],
+    // Checkpoint approach messages (shown ~25% and ~65% transit)
+    _checkpoint: [
+        "Approaching checkpoint. Reduce speed.  — NAV ALERT",
+        "Checkpoint ahead. All hands to stations.  — BRIDGE",
+        "IRGC inspection zone ahead. Documents ready.  — BRIDGE",
+        "Entering monitored corridor. Maintain heading.  — VTS HORMUZ",
+        "Patrol activity ahead. Stand by.  — CIC",
+    ],
+    china: [
+        "Chinese-flagged vessel, you are clear. As always.  — IRGC PATROL",
+        "Beijing has pre-approved your transit. Enjoy your complimentary lack of danger.  — PLA DISPATCH",
+        "CENTCOM tracking shows zero hostile contacts. Must be nice.  — CENTCOM",
+        "Insurance underwriter reports: premium unchanged. How exciting.  — LLOYD'S",
+        "Patrol boat sees your flag. Changes course. Not worth the paperwork.  — BRIDGE",
+        "Belt and Road transit privileges acknowledged.  — IRGC PATROL",
+        "Your cargo is pre-sold to three state-owned refineries. Safe travels.  — COSCO HQ",
+        "Chinese vessel, maintain course. Nobody cares about you. That is a compliment.  — VTS HORMUZ",
+        "PLA Navy sends regards. They're 4,000 miles away but it's the thought that counts.  — PLA DISPATCH",
+        "Another uneventful transit. The shareholders will be mildly satisfied.  — BRIDGE",
+    ],
+    india: [
+        "Your navy escort departed Mumbai six hours ago. ETA: six more hours.  — INDIAN NAVY",
+        "CENTCOM advises caution. Your government advises 'jugaad'.  — CENTCOM",
+        "Indian-flagged vessel, state your business.  — IRGC PATROL",
+        "Your insurer would like to remind you: this is technically not covered.  — UNDERWRITER",
+        "Mumbai HQ asks for a status update. You reply: 'alive, for now.'  — BRIDGE",
+        "Patrol boat approaching. Playing Bollywood music on all channels as deterrent.  — COMMS",
+        "INS Vikrant is in the Arabian Sea. Morally supporting your transit.  — INDIAN NAVY",
+        "IRGC hails you. Your officer negotiates in four languages simultaneously.  — BRIDGE",
+        "Chai break scheduled for 1400. Non-negotiable.  — GALLEY",
+        "Navigation officer says this is fine. Navigation officer has never been here before.  — BRIDGE",
+    ],
+    turkey: [
+        "Broadcasting MUSLIM VESSEL on all frequencies. Responses... mixed.  — COMMS",
+        "IRGC patrol questioning your flag. Theological debate in progress.  — BRIDGE",
+        "Ankara denies any knowledge of this vessel or its cargo.  — TURKISH MFA",
+        "CENTCOM tracks your vessel as 'probably fine.'  — CENTCOM",
+        "IRGC officer asks if you support Palestine. You say yes. He asks which faction.  — INTERCEPT",
+        "Turkish ice cream vendor somehow aboard. No one knows how.  — GALLEY",
+        "Erdogan sends his regards. The IRGC is unsure what this means.  — COMMS",
+        "Your diplomatic status is 'complicated.' Much like everything else.  — BRIDGE",
+        "Patrol boat hails. You respond with a proverb. They respond with a longer proverb.  — COMMS",
+        "Istanbul HQ reminds you: if stopped, you are a 'cultural exchange vessel.'  — DISPATCH",
+    ],
+    pakistan: [
+        "Ceasefire broker privileges recognized... for now.  — IRGC PATROL",
+        "Islamabad reminds you the ceasefire expires at [CLASSIFIED].  — PAK NAVY",
+        "Your diplomatic clearance has been... acknowledged. Reluctantly.  — BRIDGE",
+        "CENTCOM notes: ceasefire brokers usually survive. Usually.  — CENTCOM",
+        "IRGC patrol waves. Friendly? Hard to tell.  — LOOKOUT",
+        "Rawalpindi HQ asks if you've been shot at yet. Routine question.  — PAK NAVY",
+        "Your passage is guaranteed by a handshake deal. Literally a handshake.  — DISPATCH",
+        "ISI sends a coded message. Nobody on board can decode it. Probably fine.  — COMMS",
+        "Patrol acknowledges your flag. 'Brother nation,' they say. You feel briefly safe.  — BRIDGE",
+        "Gwadar port confirms your berth. If you make it.  — PORT AUTHORITY",
+    ],
+    uk: [
+        "HMS Lancaster requests your position. She's 200 miles away and closing.  — ROYAL NAVY",
+        "IRGC broadcasting: 'We remember 1953. And 1941. And 1856.'  — INTERCEPT",
+        "Lloyd's of London has raised your premium. Mid-transit.  — LLOYD'S",
+        "CENTCOM advises: you're on your own, old chap.  — CENTCOM",
+        "British vessel, prepare for inspection.  — IRGC PATROL",
+        "IRGC officer asks about the Elgin Marbles. This is not going well.  — BRIDGE",
+        "Royal Navy helicopter overhead. Reassuring, until it flies away.  — LOOKOUT",
+        "London insurance desk asks for 'real-time threat assessment.' You reply: 'yes.'  — COMMS",
+        "IRGC fast boat circling. Crew maintains stiff upper lip.  — BRIDGE",
+        "Your Majesty's tanker. Everyone else's problem.  — ROYAL NAVY",
+    ],
+    usa: [
+        "Multiple fast-attack craft inbound. This is fine.  — BRIDGE",
+        "CENTCOM: 'We see you. So does everyone else.'  — CENTCOM",
+        "IRGC drone overhead. It's been there for 20 minutes.  — RADAR",
+        "USS Bataan is in the area. Whether that helps is debatable.  — 5TH FLEET",
+        "Your presence has been formally protested by three nations.  — STATE DEPT",
+        "IRGC hails: 'American vessel, you are not welcome.' You: 'Noted.'  — COMMS",
+        "Satellite shows 14 fast boats between you and open water. Good luck.  — NRO",
+        "Pentagon press briefing mentions your transit. You are now famous.  — DoD",
+        "CENTCOM authorizes defensive measures. Translation: you're on your own.  — CENTCOM",
+        "Fox News is running a live tracker of your position. Great.  — COMMS",
+        "An IRGC drone just took your picture. Expect to be on Iranian state TV tonight.  — INTEL",
+        "Fifth Fleet recommends 'heightened vigilance.' You recommend 'more ships.'  — 5TH FLEET",
+    ],
+    liberia: [
+        "IRGC demands: 'Who actually owns this vessel?'  — INTERCEPT",
+        "Flag state Liberia has no navy. Good luck out there.  — BRIDGE",
+        "CENTCOM can't determine your nationality. Neither can the IRGC.  — CENTCOM",
+        "Insurance company is calling again. You should probably not answer.  — COMMS",
+        "IRGC boarding team confused by your paperwork. As intended.  — BRIDGE",
+        "Monrovia HQ: 'We registered you, we didn't say we'd protect you.'  — LIBERIAN REGISTRY",
+        "Your true owner is hidden behind six shell companies. Even you don't know.  — LEGAL",
+        "Patrol radios: 'Are you Greek? Chinese? Norwegian?' You reply: 'Yes.'  — COMMS",
+        "Flag of convenience. Inconvenience of flag.  — BRIDGE",
+        "IRGC officer says your registration smells like a tax haven. He's not wrong.  — INTERCEPT",
+    ],
+    iran: [
+        "An IRGC patrol boat waves at you. You wave back.  — BRIDGE",
+        "A decorative mine floats by with a ribbon on it.  — LOOKOUT",
+        "The IRGC salutes your vessel. Nice.  — BRIDGE",
+        "A patrol boat offers you tea via radio.  — IRGC PATROL",
+        "You pass through sovereign waters. Nobody bothers you. This is nice.  — BRIDGE",
+        "An IRGC officer radios: 'Beautiful day for a transit, brother.'  — IRGC PATROL",
+        "Welcome home, captain. Your waters, your rules.  — IRGC PATROL",
+        "The mines politely move aside for you.  — NAV",
+        "An IRGC helicopter does a flyby. The pilot gives a thumbs up.  — LOOKOUT",
+        "Port Bandar Abbas confirms your berth. The tea is already brewing.  — PORT AUTHORITY",
+        "A patrol boat pulls alongside. They hand over a bag of pistachios.  — BRIDGE",
+        "State media is filming your transit. You are tonight's feel-good story.  — COMMS",
+    ],
+};
+
 // ---- Headlines ----
 const H_SUCCESS = {
     china:[
@@ -1024,8 +1149,8 @@ function initGame() {
         titlePulse: 0,
         briefTimer: 0,
         overTimer: 0,
-        iranMsg: '',
-        iranMsgTimer: 0,
+        radioMsg: '',
+        radioTimer: 0,
         touchActive: false,
         touchX: 0,
         touchY: 0,
@@ -1057,7 +1182,7 @@ window.addEventListener('click', e => {
     if (typeof tryFullscreen === 'function' && game && game.screen === 'title') tryFullscreen();
 });
 // ---- D-Pad geometry (computed after resize) ----
-let dpadCx = 0, dpadCy = 0, dpadR = 0, dpadInnerR = 0;
+let dpadCx = 0, dpadCy = 0, dpadR = 0, dpadInnerR = 0, dpadKnobX = 0, dpadKnobY = 0;
 function updateDpadGeom() {
     dpadR = Math.min(65, Math.max(40, ch * 0.15));
     dpadInnerR = dpadR * 0.38;
@@ -1079,6 +1204,7 @@ function hitTestDpad(tx, ty) {
 
 function clearDpad() {
     if (game && game.dpad) { game.dpad.up=false; game.dpad.down=false; game.dpad.left=false; game.dpad.right=false; }
+    dpadKnobX = 0; dpadKnobY = 0;
 }
 
 function processDpadTouches(touches) {
@@ -1091,6 +1217,13 @@ function processDpadTouches(touches) {
             if (dir === 'down') game.dpad.down = true;
             if (dir === 'left') game.dpad.left = true;
             if (dir === 'right') game.dpad.right = true;
+            // Track finger offset for knob, clamped to outer ring
+            const dx = t.clientX - dpadCx, dy = t.clientY - dpadCy;
+            const d = Math.sqrt(dx * dx + dy * dy);
+            const maxD = dpadR * 0.65;
+            const clamp = d > maxD ? maxD / d : 1;
+            dpadKnobX = dx * clamp;
+            dpadKnobY = dy * clamp;
         }
     }
 }
@@ -1340,8 +1473,8 @@ function startTransit(){
     game.encounter = { active:false, phase:'', intensity:0, result:null, timer:0, choiceIdx:-1 };
     game.damageFlash = 0;
     game.screenShake = 0;
-    game.iranMsg = '';
-    game.iranMsgTimer = 0;
+    game.radioMsg = '';
+    game.radioTimer = 0;
     player.x = 400;
     player.y = WORLD_H/2;
     player.vx = BASE_SPEED;
@@ -1512,7 +1645,7 @@ function updateFlagSelect(dt){
     }
     // Mouse / tap on flag row
     if(mouseClick){
-        const mob = cw<600;
+        const mob = cw<600||ch<500;
         const panelW = mob ? cw*0.94 : Math.min(720, cw*0.9);
         const panelH = mob ? ch*0.94 : Math.min(700, ch*0.92);
         const px = (cw-panelW)/2;
@@ -1685,21 +1818,21 @@ function updateGameplay(dt){
         }
     }
 
-    // Iran easter egg messages
-    if(f.key==='iran'){
-        game.iranMsgTimer -= dt;
-        if(game.iranMsgTimer<=0){
-            const msgs = [
-                "An IRGC patrol boat waves at you. You wave back.",
-                "A decorative mine floats by with a ribbon on it.",
-                "The IRGC salutes your vessel. Nice.",
-                "A patrol boat offers you tea via radio.",
-                "You pass through sovereign waters. Nobody bothers you. This is nice.",
-                "An IRGC officer radios: 'Beautiful day for a transit, brother.'",
-            ];
-            game.iranMsg = pick(msgs);
-            game.iranMsgTimer = rand(8,15);
+    // Radio chatter (all flags)
+    game.radioTimer -= dt;
+    if(game.radioTimer <= 0){
+        const pct = clamp((player.x-300)/(MAP_W-600), 0, 1);
+        const pool = [];
+        // Country-specific messages (weighted heavier)
+        if(RADIO[f.key]) pool.push(...RADIO[f.key], ...RADIO[f.key]);
+        // Checkpoint messages near ~25% and ~65% transit
+        if((pct > 0.20 && pct < 0.30) || (pct > 0.60 && pct < 0.70)){
+            pool.push(...RADIO._checkpoint, ...RADIO._checkpoint);
         }
+        // General messages
+        pool.push(...RADIO._general);
+        game.radioMsg = pick(pool);
+        game.radioTimer = rand(6, 12);
     }
 
     // Transit complete
@@ -1730,7 +1863,7 @@ function updateEncounter(dt){
         }
         // Mouse / tap on choices
         if(mouseClick && enc._choiceYs){
-            const mob = cw<600;
+            const mob = cw<600||ch<500;
             const pad = mob?12:20;
             const choiceH = Math.max(28, ch*0.06);
             const panelW = mob ? cw*0.94 : Math.min(620, cw*0.82);
@@ -1819,7 +1952,7 @@ function renderTitle(){
     drawText('RUN', cx, cy+ch*0.03, {size:Math.min(72,cw*0.1), align:'center', color:C_GREEN, bold:true, glow:20, baseline:'middle'});
 
     // Subtitle
-    const mob = cw<600;
+    const mob = cw<600||ch<500;
     drawText('Navigate. Survive. Profit.', cx, cy+65, {size:mob?12:16, align:'center', color:C_GREEN_DIM, baseline:'middle'});
 
     // Prompt
@@ -1835,7 +1968,7 @@ function renderFlagSelect(){
     ctx.fillStyle = '#050d08';
     ctx.fillRect(0,0,cw,ch);
 
-    const mob = cw < 600;
+    const mob = cw < 600 || ch < 500;
     const panelW = mob ? cw*0.94 : Math.min(720, cw*0.9);
     const panelH = mob ? ch*0.94 : Math.min(700, ch*0.92);
     const px = (cw-panelW)/2;
@@ -1913,7 +2046,7 @@ function renderBriefing(){
     ctx.fillRect(0,0,cw,ch);
 
     const f = game.flag;
-    const mob = cw<600;
+    const mob = cw<600||ch<500;
     const panelW = Math.min(550, cw*(mob?0.94:0.85));
     const px = (cw-panelW)/2;
     const cy = ch/2;
@@ -2155,10 +2288,11 @@ function renderGameplay(){
     // HUD
     renderHUD();
 
-    // Iran flavor text
-    if(game.flag.key==='iran' && game.iranMsg){
-        const alpha = Math.min(1, game.iranMsgTimer/2);
-        drawText(game.iranMsg, cw/2, ch-70, {size:14, align:'center', color:`rgba(170,102,255,${alpha})`, glow:4});
+    // Radio chatter
+    if(game.radioMsg){
+        const alpha = Math.min(1, game.radioTimer/2);
+        const col = game.flag.key==='iran' ? `rgba(170,102,255,${alpha})` : `rgba(100,180,120,${alpha})`;
+        drawText(game.radioMsg, cw/2, ch-70, {size:13, align:'center', color:col, glow:4});
     }
 
     drawScanlines();
@@ -2303,7 +2437,7 @@ function renderCoastlines(){
 
 function renderHUD(){
     const f = game.flag;
-    const mob = cw<600;
+    const mob = cw<600||ch<500;
     const pad = mob?8:15;
 
     // Flag
@@ -2403,16 +2537,17 @@ function renderHUD(){
             ctx.restore();
         }
 
-        // Center knob
+        // Center knob (follows finger)
+        const kx = cx + dpadKnobX, ky = cy + dpadKnobY;
         ctx.globalAlpha = 0.5;
-        const kGrad = ctx.createRadialGradient(cx, cy-ir*0.15, 0, cx, cy, ir);
+        const kGrad = ctx.createRadialGradient(kx, ky-ir*0.15, 0, kx, ky, ir);
         kGrad.addColorStop(0, '#999');
         kGrad.addColorStop(1, '#555');
         ctx.fillStyle = kGrad;
-        ctx.beginPath(); ctx.arc(cx, cy, ir, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(kx, ky, ir, 0, Math.PI*2); ctx.fill();
         ctx.strokeStyle = '#666';
         ctx.lineWidth = 1.5;
-        ctx.beginPath(); ctx.arc(cx, cy, ir, 0, Math.PI*2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(kx, ky, ir, 0, Math.PI*2); ctx.stroke();
 
         ctx.restore();
     }
@@ -2423,7 +2558,7 @@ function renderEncounter(){
     ctx.fillRect(0,0,cw,ch);
 
     const enc = game.encounter;
-    const mob = cw<600;
+    const mob = cw<600||ch<500;
     const fs = Math.max(11, Math.min(16, panelW*0.035));
     const fsH = Math.max(11, Math.min(18, panelW*0.04));
     const lineH = fs+5;
@@ -2503,7 +2638,7 @@ function renderGameOver(){
     ctx.fillRect(0,0,cw,ch);
 
     const f = game.flag;
-    const mob = cw<600;
+    const mob = cw<600||ch<500;
     const panelW = mob ? cw*0.94 : Math.min(650, cw*0.88);
     const px = (cw-panelW)/2;
     const pad = mob?10:15;

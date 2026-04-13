@@ -1,0 +1,1743 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>HORMUZ RUN</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#000}
+canvas{display:block;cursor:crosshair;image-rendering:auto}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+'use strict';
+// ============================================================
+//  HORMUZ RUN  —  Navigate. Survive. Profit.
+// ============================================================
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+// ---- Resize ----
+let scale = 1, viewW = 0;
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    scale = canvas.height / WORLD_H;
+    viewW = canvas.width / scale;
+}
+
+// ---- Constants ----
+const MAP_W = 15000;
+const WORLD_H = 800;
+const BASE_SPEED = 85;
+const SPEED_BOOST = 50;
+const SPEED_BRAKE = 35;
+const VERT_ACCEL = 420;
+const VERT_DRAG = 4.0;
+const MAX_VY = 180;
+const PLAYER_R = 24;
+const MINE_R = 11;
+const MINE_DMG = 30;
+const DRONE_R = 8;
+const DRONE_DMG = 22;
+const DRONE_SPEED = 260;
+const DEBRIS_R = 18;
+const DEBRIS_DMG = 15;
+const MAX_HP = 100;
+const ENCOUNTER_XS = [3800, 7500, 11200];
+const CARGO_BASE = 160000000;
+const REPAIR_MAX = 50000000;
+const FONT = '"Courier New","Consolas","Monaco",monospace';
+
+// ---- Colors ----
+const C_WATER     = '#0a1628';
+const C_LAND      = '#0f2818';
+const C_LAND_EDGE = '#1a4030';
+const C_GREEN     = '#33ff88';
+const C_GREEN_DIM = '#1a7744';
+const C_RED       = '#ff3333';
+const C_GOLD      = '#ffcc33';
+const C_PANEL     = 'rgba(5,15,8,0.92)';
+const C_PANELBDR  = '#1a5533';
+
+// ---- Flag Data ----
+const FLAGS = [
+    {
+        key:'china', name:'China', code:'CN', emoji:'\u{1F1E8}\u{1F1F3}',
+        diff:'EASY', diffCol:'#33ff33', multi:0.5,
+        threat:0.1, bluff:0.15, escort:0.05, stealth:0.7,
+        mines:0.25, drones:0.05, debris:0.2, maxEnc:1,
+        toll:1000000,
+        desc:"Pre-approved passage courtesy of Beijing's \"Belt, Road & Strait\" initiative. Low risk, low reward. Your oil arrives safely and is immediately added to the Strategic Petroleum Reserve, never to be seen again.",
+    },
+    {
+        key:'india', name:'India', code:'IN', emoji:'\u{1F1EE}\u{1F1F3}',
+        diff:'MEDIUM', diffCol:'#ffcc33', multi:1.2,
+        threat:0.4, bluff:0.4, escort:0.35, stealth:0.4,
+        mines:0.5, drones:0.35, debris:0.4, maxEnc:2,
+        toll:2000000,
+        desc:"A \"negotiated corridor\" exists in theory. Your navy escort was dispatched six hours ago. It will arrive in approximately six more hours. In the meantime, try not to die.",
+    },
+    {
+        key:'turkey', name:'Turkey', code:'TR', emoji:'\u{1F1F9}\u{1F1F7}',
+        diff:'MEDIUM', diffCol:'#ffcc33', multi:1.1,
+        threat:0.35, bluff:0.5, escort:0.1, stealth:0.35,
+        mines:0.45, drones:0.3, debris:0.4, maxEnc:2,
+        toll:2000000,
+        desc:"Strategy: broadcast \"MUSLIM-OWNED VESSEL\" on all frequencies. Effectiveness: variable. Side effects may include theological debates with IRGC patrol operators.",
+    },
+    {
+        key:'pakistan', name:'Pakistan', code:'PK', emoji:'\u{1F1F5}\u{1F1F0}',
+        diff:'MEDIUM-EASY', diffCol:'#88dd44', multi:0.9,
+        threat:0.25, bluff:0.45, escort:0.15, stealth:0.45,
+        mines:0.35, drones:0.2, debris:0.3, maxEnc:2,
+        toll:1500000,
+        desc:"Ceasefire broker privileges grant preferred passage. Terms and conditions apply. Ceasefire may expire without notice. Pakistan is not responsible for any military action occurring after ceasefire expiration, which could be any moment now.",
+    },
+    {
+        key:'uk', name:'United Kingdom', code:'GB', emoji:'\u{1F1EC}\u{1F1E7}',
+        diff:'HARD', diffCol:'#ff6633', multi:2.0,
+        threat:0.7, bluff:0.2, escort:0.6, stealth:0.25,
+        mines:0.75, drones:0.65, debris:0.6, maxEnc:3,
+        toll:3000000,
+        desc:"Former colonial power returns to former colonial chokepoint. Everyone remembers. Your cargo fetches premium prices because insurers assume you'll die. Prove them wrong.",
+    },
+    {
+        key:'usa', name:'United States', code:'US', emoji:'\u{1F1FA}\u{1F1F8}',
+        diff:'NIGHTMARE', diffCol:'#ff2222', multi:3.0,
+        threat:0.85, bluff:0.1, escort:0.7, stealth:0.15,
+        mines:1.0, drones:1.0, debris:0.8, maxEnc:3,
+        toll:4000000,
+        desc:"You are the main character and this is a horror movie. Everything in the strait wants you dead. Maximum cargo value. Maximum hostility. Maximum American exceptionalism.",
+    },
+    {
+        key:'liberia', name:'Liberia', code:'LR', emoji:'\u{1F1F1}\u{1F1F7}',
+        diff:'HARD', diffCol:'#ff6633', multi:1.5,
+        threat:0.55, bluff:0.6, escort:0.05, stealth:0.5,
+        mines:0.65, drones:0.5, debris:0.55, maxEnc:3,
+        toll:2500000,
+        desc:"Flag of convenience, inconvenience of flag. You could be anyone \u2014 Greek, Chinese, Norwegian \u2014 and that ambiguity makes everyone nervous. The IRGC doesn't like mysteries.",
+    },
+    {
+        key:'iran', name:'Iran', code:'IR', emoji:'\u{1F1EE}\u{1F1F7}',
+        diff:'???', diffCol:'#aa66ff', multi:0.0,
+        threat:0, bluff:0, escort:0, stealth:1,
+        mines:0, drones:0, debris:0, maxEnc:0,
+        toll:0,
+        desc:"Your strait. Your rules. Sail freely through your own sovereign waters. No mines, no drones, no tolls. Arrive at port and discover international sanctions mean nobody will buy your oil. Score: $0. But the vibes? Immaculate.",
+    },
+];
+
+// ---- Headlines ----
+const H_SUCCESS = {
+    china:[
+        "CHINESE TANKER COMPLETES ROUTINE TRANSIT; CALLS IT 'NORMAL BUSINESS ACTIVITY'",
+        "PRC VESSEL DOCKS WITH FULL CARGO; INSURER STUNNED ANYONE STILL PAYS PREMIUMS",
+        "CHINESE SHIP SAILS THROUGH UNMOLESTED; PENTAGON FURIOUS ABOUT 'UNFAIR ADVANTAGE OF NOT BEING HATED'",
+    ],
+    india:[
+        "INDIAN TANKER ARRIVES SAFELY; NAVY ESCORT ARRIVES THREE HOURS LATER ASKING 'DID WE MISS IT?'",
+        "INDIAN VESSEL COMPLETES TRANSIT; CREW CELEBRATES WITH WORLD'S MOST EXPENSIVE CHAI",
+        "INDIAN SHIP DOCKS IN MUMBAI; OIL PRICE CHANGED 14 TIMES DURING TRANSIT",
+    ],
+    turkey:[
+        "TURKISH VESSEL SURVIVES HORMUZ; ERDOGAN TAKES PERSONAL CREDIT",
+        "TURKISH TANKER BROADCASTS 'MUSLIM SHIP' ON ALL FREQUENCIES; ARRIVES SAFELY BUT HOARSE",
+        "TURKISH CAPTAIN NEGOTIATES PASSAGE; SIMULTANEOUSLY NEGOTIATES CARPET SALE WITH PATROL BOAT",
+    ],
+    pakistan:[
+        "PAKISTANI TANKER ARRIVES CITING 'CEASEFIRE PRIVILEGES'; CEASEFIRE EXPIRED 20 MINUTES AGO",
+        "PAKISTANI VESSEL TRANSITS SAFELY; CREDITS 'EXTREMELY GOOD TIMING'",
+        "PAK SHIP DELIVERS CARGO; BROKER FEE SOMEHOW LARGER THAN CARGO VALUE",
+    ],
+    uk:[
+        "BRITISH TANKER SURVIVES HORMUZ; LLOYD'S OF LONDON IMMEDIATELY RAISES EVERYONE ELSE'S PREMIUMS",
+        "HMS CARGO COMPLETES TRANSIT; CREW MAINTAINS STIFF UPPER LIP AND THIRD-DEGREE BURNS",
+        "BRITISH VESSEL ARRIVES MISSING HALF ITS HULL; CAPTAIN DESCRIBES TRANSIT AS 'A BIT CHOPPY'",
+    ],
+    usa:[
+        "AMERICAN TANKER SURVIVES STRAIT; CONGRESS PASSES RESOLUTION CONGRATULATING ITSELF",
+        "US-FLAGGED VESSEL DELIVERS CARGO; PENTAGON DEPLOYS CARRIER GROUP TO CELEBRATE",
+        "FREEDOM SHIP ARRIVES IN PORT; DAMAGE COSTS EXCEED GDP OF SEVERAL PARTICIPATING NATIONS",
+    ],
+    liberia:[
+        "LIBERIAN-FLAGGED VESSEL OF SUSPICIOUSLY GREEK ORIGIN ARRIVES SAFELY",
+        "LIBERIAN TANKER TRANSITS HORMUZ; ACTUAL LIBERIANS UNAWARE THEY HAVE A NAVY",
+        "FLAG-OF-CONVENIENCE VESSEL DELIVERS CARGO; OWNER REMAINS CONVENIENTLY ANONYMOUS",
+    ],
+};
+const H_SUNK = {
+    china:[
+        "CHINESE VESSEL SUNK; BEIJING DENIES IT EXISTED",
+        "PRC TANKER LOST; STATE MEDIA REPORTS 'ROUTINE SUBMARINE CONVERSION'",
+    ],
+    india:[
+        "INDIAN TANKER SINKS; NAVY ESCORT ARRIVES TO FIND ONLY WRECKAGE AND REGRET",
+        "INDIAN VESSEL LOST; CREW'S LAST TRANSMISSION: 'WHERE IS THE ESCORT?'",
+    ],
+    turkey:[
+        "TURKISH TANKER SINKS MID-BROADCAST; LAST WORDS: 'BUT I SAID MUSLIM SHIP'",
+        "TURKISH VESSEL GOES DOWN; THEOLOGICAL DEBATE WITH IRGC ENDS INCONCLUSIVELY",
+    ],
+    pakistan:[
+        "PAKISTANI SHIP SINKS; CEASEFIRE REPORTEDLY STILL TECHNICALLY ACTIVE",
+        "PAK VESSEL LOST; CEASEFIRE BROKERS NOW BROKERING SALVAGE RIGHTS",
+    ],
+    uk:[
+        "BRITISH SHIP GOES DOWN; CREW'S LAST WORDS: 'THIS IS FINE'",
+        "HMS CARGO SINKS; LLOYD'S OF LONDON SPONTANEOUSLY COMBUSTS",
+    ],
+    usa:[
+        "AMERICAN TANKER DESTROYED; CONGRESS FORMS SUBCOMMITTEE TO INVESTIGATE SUBCOMMITTEE",
+        "US VESSEL SUNK; PENTAGON VOWS RETALIATION, THEN CHECKS OIL PRICES FIRST",
+    ],
+    liberia:[
+        "LIBERIAN-FLAGGED SHIP SINKS; NOBODY CLAIMS OWNERSHIP, INSURANCE, OR RESPONSIBILITY",
+        "FLAG-OF-CONVENIENCE VESSEL LOST; CONVENIENT FOR ABSOLUTELY NOBODY",
+    ],
+    generic:[
+        "TANKER SINKS IN STRAIT; INSURANCE ADJUSTERS LAST SEEN WEEPING",
+        "VESSEL LOST WITH ALL CARGO; GLOBAL OIL PRICE INCREASES BY AMOUNT TOO SMALL TO NOTICE",
+        "SHIP DOWN IN HORMUZ; OIL SLICK ALREADY HAS ITS OWN MARITIME INSURANCE POLICY",
+        "TANKER DESTROYED; CREW'S LAST TRANSMISSION: 'SHOULD HAVE PICKED CHINA'",
+        "VESSEL LOST; FLAG STATE ISSUES STRONGLY WORDED LETTER TO NOBODY IN PARTICULAR",
+    ],
+};
+const H_IRAN = [
+    "IRANIAN TANKER COMPLETES FLAWLESS TRANSIT; LITERALLY NO ONE CARES",
+    "IRANIAN VESSEL ARRIVES AT PORT; PORT PRETENDS TO BE CLOSED",
+    "IRAN'S FINEST TANKER SAILS FREE; DISCOVERS FREEDOM ISN'T WORTH $0",
+    "IRANIAN SHIP DOCKS PERFECTLY; DOCK WORKERS ON INDEFINITE SANCTIONS BREAK",
+];
+const LAST_WORDS = {
+    china:"At least we had diplomatic immunity...",
+    india:"The escort should be here any minute...",
+    turkey:"But I said 'Muslim ship'...",
+    pakistan:"But the ceasefire...",
+    uk:"Bit of a sticky wicket, what?",
+    usa:"We didn't negotiate with terrorists. In hindsight...",
+    liberia:"We weren't who they thought we were... we think...",
+    iran:"How?",
+};
+
+// ---- Encounter Hails ----
+const HAILS = [
+    ["Unidentified vessel, this is IRGC Naval Forces.","You are approaching sovereign Iranian waters.","Identify yourself and state your cargo."],
+    ["We have you on radar. Your passage is not authorized.","Heave to for inspection or face consequences.","This is not a request."],
+    ["FINAL WARNING.","Stop your engines immediately.","Weapons are locked on your vessel.","You have 30 seconds to comply."],
+];
+
+// ---- Encounter Choice Results ----
+const TOLL_TEXTS = [
+    "Payment accepted. The patrol peels off. You try not to think about the per-barrel cost.",
+    "Transaction complete. IRGC wishes you safe travels. Your shareholders wish you made different career choices.",
+    "Toll received. The operator says 'pleasure doing business.' You can hear him smiling.",
+];
+const REFUSE_OK = {
+    china:"The patrol hesitates, checks a list, and apologetically clears you. Apparently China has leverage.",
+    india:"Long silence. The patrol grumbles something about 'corridor agreements' and leaves.",
+    turkey:"'We are a Muslim vessel!' Longer pause than you'd like. '...Proceed.' Bismillah.",
+    pakistan:"'We are a ceasefire broker vessel.' The operator sighs. 'Fine. Go.' Diplomacy works.",
+    uk:"Your refusal is met with stunned silence. They weren't expecting backbone. They leave.",
+    usa:"You refuse. The operator sounds genuinely confused that anyone would be this bold. Standoff... they blink first.",
+    liberia:"'We refuse.' 'Who even ARE you?' Good question. They leave to figure it out.",
+};
+const REFUSE_FAIL = [
+    "The patrol opens fire. Several new holes appear in your hull.",
+    "Warning shots become real shots. Your damage report is... not great.",
+    "Autocannon rounds rake your deck. That's coming out of someone's budget.",
+];
+const BLUFF_OK = {
+    china:"You claim to be North Korean. The operator doesn't want to deal with that. 'Proceed.'",
+    india:"'We are a Bangladeshi freighter.' '...Fine.' Nobody wants to check.",
+    turkey:"'We are Qatari!' Given recent politics, this buys you passage.",
+    pakistan:"'We are Afghan!' 'Afghanistan is landlocked.' '...We are very lost.' They let you go out of pity.",
+    uk:"'This is the French vessel Libert\u00e9.' Incredibly, they buy it. The French will never know.",
+    usa:"'We are Norwegian.' 'Your ship says USS FREEDOM EAGLE.' '...That's Norwegian for...' They open fire.",
+    liberia:"'We are Panamanian.' Flag of convenience vs flag of convenience. Believable enough.",
+};
+const BLUFF_FAIL = {
+    china:"'You are... not Chinese.' Correct. They saw right through that.",
+    india:"'You claim to be Sri Lankan. Your vessel is ten times the size of the Sri Lankan navy.' Busted.",
+    turkey:"'We are Greek!' Dead silence. 'Did you just say GREEK?' This was a catastrophic choice.",
+    pakistan:"Your bluff collapses instantly. The operator sounds personally offended.",
+    uk:"'This is a French vessel.' 'You are broadcasting BBC Radio 4.' Damn.",
+    usa:"'We are Norwegian.' 'Your vessel has bald eagles painted on every surface.' Fair point.",
+    liberia:"Your bluff fails. The IRGC can smell flag-of-convenience desperation.",
+};
+const ESCORT_OK = {
+    china:"A Chinese coast guard vessel radios back. 'We will observe.' The IRGC decides not to start WW3 today.",
+    india:"INS Vikrant responds. The patrol boats suddenly have urgent business elsewhere.",
+    turkey:"A Turkish frigate responds. The IRGC grumbles and withdraws. NATO adjacent is still adjacent.",
+    pakistan:"Pakistan Navy responds, citing ceasefire obligations. The patrol backs down.",
+    uk:"HMS Destroyer emerges from the haze. The IRGC boats scatter like roaches when you flip the light on.",
+    usa:"USS Destroyer responds. The IRGC patrol discovers urgent maintenance needs and retreats at flank speed.",
+    liberia:"No one comes. Liberia's navy is... theoretical.",
+};
+const ESCORT_FAIL = [
+    "Your distress call echoes into the void. Somewhere, a naval officer adds a note to a spreadsheet.",
+    "Navy command responds: 'We are aware of your situation.' They don't say anything else.",
+    "Radio static. More static. Your escort is 'approximately 4 hours away.' Helpful.",
+];
+const DARK_OK = [
+    "Transponder off. Minutes crawl by. The searchlight sweeps past. You're a ghost.",
+    "Total electronic silence. You drift through the dark. The IRGC never knew you were here.",
+    "Lights out. Radio silent. Your crew communicates in whispers. Unnecessarily, but atmospherically.",
+];
+const DARK_FAIL = [
+    "You go dark. Unfortunately, your ship is the size of the Empire State Building and they have binoculars.",
+    "Transponder off. 90 seconds of hope. Then a searchlight finds your 300-meter hull. Subtlety isn't your strength.",
+    "Going dark in a supertanker is like an elephant hiding behind a lamppost. They open fire.",
+];
+
+// ---- Game State ----
+let game, player, camera, obstacles, drones, particles, encounterZones, islets, docks;
+const keys = {};
+let mouseX = 0, mouseY = 0, mouseClick = false;
+
+function initGame() {
+    game = {
+        screen: 'title',
+        flagIdx: 0,
+        flag: null,
+        time: 0,
+        gameTime: 0,
+        survived: false,
+        score: 0,
+        headline: '',
+        lastWords: '',
+        transitPct: 0,
+        encounter: { active:false, phase:'', intensity:0, result:null, timer:0, choiceIdx:-1 },
+        damageFlash: 0,
+        screenShake: 0,
+        titlePulse: 0,
+        briefTimer: 0,
+        overTimer: 0,
+        iranMsg: '',
+        iranMsgTimer: 0,
+        touchActive: false,
+        touchX: 0,
+        touchY: 0,
+    };
+    player = { x:0, y:0, vx:0, vy:0, hp:MAX_HP, angle:0, tollsPaid:0, alive:true };
+    camera = { x:0 };
+    obstacles = [];
+    drones = [];
+    particles = [];
+    encounterZones = [];
+    islets = [];
+    docks = [];
+}
+
+// ---- Input ----
+window.addEventListener('keydown', e => {
+    keys[e.key.toLowerCase()] = true;
+    keys['_last'] = e.key.toLowerCase();
+    if(e.key === ' ') e.preventDefault();
+});
+window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+window.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
+window.addEventListener('click', e => { mouseClick = true; mouseX = e.clientX; mouseY = e.clientY; });
+canvas.addEventListener('touchstart', e => {
+    e.preventDefault(); const t=e.touches[0];
+    mouseX=t.clientX; mouseY=t.clientY; mouseClick=true;
+    game.touchActive=true; game.touchX=t.clientX; game.touchY=t.clientY;
+}, {passive:false});
+canvas.addEventListener('touchmove', e => {
+    e.preventDefault(); const t=e.touches[0];
+    mouseX=t.clientX; mouseY=t.clientY;
+    game.touchX=t.clientX; game.touchY=t.clientY;
+}, {passive:false});
+canvas.addEventListener('touchend', e => { e.preventDefault(); game.touchActive=false; }, {passive:false});
+window.addEventListener('resize', resize);
+resize();
+
+// ---- Utility ----
+function lerp(a,b,t){ return a+(b-a)*t; }
+function clamp(v,lo,hi){ return v<lo?lo:v>hi?hi:v; }
+function rand(a,b){ return a+Math.random()*(b-a); }
+function randInt(a,b){ return Math.floor(rand(a,b+1)); }
+function dist(x1,y1,x2,y2){ const dx=x1-x2,dy=y1-y2; return Math.sqrt(dx*dx+dy*dy); }
+function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+function fmtMoney(n){
+    if(Math.abs(n)>=1e9) return '$'+(n/1e9).toFixed(1)+'B';
+    if(Math.abs(n)>=1e6) return '$'+(n/1e6).toFixed(1)+'M';
+    if(Math.abs(n)>=1e3) return '$'+(n/1e3).toFixed(0)+'K';
+    return '$'+n.toFixed(0);
+}
+function wToSx(wx){ return (wx - camera.x)*scale; }
+function wToSy(wy){ return wy*scale; }
+
+// ---- Text Drawing ----
+function drawText(text, x, y, opts={}){
+    const size = opts.size||14;
+    const col = opts.color||C_GREEN;
+    const align = opts.align||'left';
+    const glow = opts.glow||0;
+    ctx.save();
+    ctx.font = (opts.bold?'bold ':'')+size+'px '+FONT;
+    ctx.fillStyle = col;
+    ctx.textAlign = align;
+    ctx.textBaseline = opts.baseline||'top';
+    if(glow>0){ ctx.shadowColor=col; ctx.shadowBlur=glow; }
+    ctx.fillText(text, x, y);
+    if(glow>1){ ctx.fillText(text, x, y); }
+    ctx.restore();
+}
+function wrapText(text, x, y, maxW, lineH, opts={}){
+    const size = opts.size||14;
+    ctx.font = (opts.bold?'bold ':'')+size+'px '+FONT;
+    const words = text.split(' ');
+    let line = '', cy = y;
+    for(const w of words){
+        const test = line + w + ' ';
+        if(ctx.measureText(test).width > maxW && line !== ''){
+            drawText(line.trim(), x, cy, opts);
+            line = w + ' ';
+            cy += lineH;
+        } else { line = test; }
+    }
+    drawText(line.trim(), x, cy, opts);
+    return cy + lineH;
+}
+
+// ---- Terrain ----
+function iranCoastY(wx){
+    let y = 90;
+    y += Math.sin(wx*0.0007)*25;
+    y += Math.sin(wx*0.002)*12;
+    y += Math.sin(wx*0.005)*6;
+    y += Math.sin(wx*0.013)*4;
+    y += Math.sin(wx*0.029+1.3)*2.5;
+    const p = wx/MAP_W;
+    y += Math.sin(p*Math.PI)*75;
+    return y;
+}
+function omanCoastY(wx){
+    let y = WORLD_H - 90;
+    y -= Math.sin(wx*0.0009)*20;
+    y -= Math.sin(wx*0.0025)*15;
+    y -= Math.sin(wx*0.006)*5;
+    y -= Math.sin(wx*0.015)*4;
+    y -= Math.sin(wx*0.033+2.1)*2.5;
+    const p = wx/MAP_W;
+    y -= Math.sin(p*Math.PI)*75;
+    return y;
+}
+// Qeshm Island: hangs down from Iran coast in the middle section
+function qeshmY(wx){
+    if(wx<4500||wx>7800) return -1;
+    const t = (wx-4500)/3300;
+    const h = Math.sin(t*Math.PI)*110;
+    return iranCoastY(wx) + h;
+}
+function waterTop(wx){ const q=qeshmY(wx); return q>0? q+8 : iranCoastY(wx)+8; }
+function waterBot(wx){ return omanCoastY(wx)-8; }
+
+// ---- Obstacle Generation ----
+function generateMap(){
+    const f = game.flag;
+    obstacles = [];
+    drones = [];
+    encounterZones = [];
+
+    // Mines
+    const nMines = Math.floor(40 * f.mines);
+    for(let i=0;i<nMines;i++){
+        const wx = rand(800, MAP_W-800);
+        const top = waterTop(wx)+20;
+        const bot = waterBot(wx)-20;
+        if(bot-top < 40) continue;
+        obstacles.push({ type:'mine', x:wx, y:rand(top,bot), r:MINE_R, dmg:MINE_DMG, active:true, phase:rand(0,5) });
+    }
+
+    // Debris
+    const nDebris = Math.floor(20 * f.debris);
+    for(let i=0;i<nDebris;i++){
+        const wx = rand(1200, MAP_W-800);
+        const top = waterTop(wx)+25;
+        const bot = waterBot(wx)-25;
+        if(bot-top < 50) continue;
+        obstacles.push({ type:'debris', x:wx, y:rand(top,bot), r:DEBRIS_R, dmg:DEBRIS_DMG, active:true, angle:rand(-0.5,0.5) });
+    }
+
+    // Wrecks (scenery only)
+    const wreckXs = [1800, 4200, 6300, 9500, 12500];
+    for(const wx of wreckXs){
+        const side = Math.random()>0.5;
+        const wy = side ? iranCoastY(wx)+rand(2,18) : omanCoastY(wx)-rand(2,18);
+        obstacles.push({ type:'wreck', x:wx, y:wy, r:0, dmg:0, active:false,
+            angle:rand(-0.6,0.6), name:pick(['MV Prosperity','Mayuree Naree','MT Salvation','Hadi Pioneer','Star Zenith']) });
+    }
+
+    // Drone waves (spawn data)
+    const nWaves = Math.floor(10 * f.drones);
+    for(let i=0;i<nWaves;i++){
+        const wx = rand(2000, MAP_W-2000);
+        const count = randInt(2,4);
+        for(let j=0;j<count;j++){
+            drones.push({ x:wx+rand(-200,200), y:-50, vy:DRONE_SPEED, spawned:false, active:false, spent:false, spawnX:wx+rand(-100,100) });
+        }
+    }
+
+    // Encounter zones
+    for(let i=0;i<Math.min(f.maxEnc, 3);i++){
+        encounterZones.push({ x:ENCOUNTER_XS[i], triggered:false, intensity:i });
+    }
+
+    // Islets — small rocky islands near coastlines
+    islets = [];
+    for(let i=0;i<18;i++){
+        const wx = rand(400, MAP_W-400);
+        const nearIran = Math.random()>0.5;
+        const coastY = nearIran ? iranCoastY(wx) : omanCoastY(wx);
+        const offset = nearIran ? rand(15,55) : -rand(15,55);
+        const r = rand(10,28);
+        // generate a jagged outline (6-9 vertices)
+        const verts = randInt(6,9);
+        const pts = [];
+        for(let v=0;v<verts;v++){
+            const a = (v/verts)*Math.PI*2;
+            const rr = r * rand(0.5,1.0);
+            pts.push({dx:Math.cos(a)*rr, dy:Math.sin(a)*rr});
+        }
+        islets.push({ x:wx, y:coastY+offset, pts });
+    }
+
+    // Docks / piers — extend from coastlines
+    docks = [];
+    const dockXs = [900,2400,3600,5800,8400,10200,11800,13500];
+    for(const wx of dockXs){
+        const nearIran = Math.random()>0.5;
+        const coastY = nearIran ? iranCoastY(wx) : omanCoastY(wx);
+        const dir = nearIran ? 1 : -1;
+        const len = rand(25,50);
+        const piers = randInt(1,3);
+        docks.push({ x:wx, coastY, dir, len, piers, width:rand(4,8) });
+    }
+}
+
+// ---- Scoring ----
+function calcScore(){
+    if(!player.alive && game.screen==='gameOver') return 0;
+    const f = game.flag;
+    if(f.key==='iran') return 0;
+    const pct = clamp((player.x-300)/(MAP_W-600), 0, 1);
+    const base = CARGO_BASE * pct;
+    const dmgCost = ((MAX_HP - player.hp)/MAX_HP)*REPAIR_MAX;
+    let s = base*f.multi - player.tollsPaid - dmgCost;
+    if(game.gameTime<120) s*=1.3; else if(game.gameTime<180) s*=1.1;
+    if(player.hp===MAX_HP) s*=1.5;
+    return Math.max(0, Math.round(s));
+}
+
+// ---- Particles ----
+function spawnParticles(x,y,count,col,spd,sz){
+    for(let i=0;i<count;i++){
+        const a=rand(0,Math.PI*2), sp=rand(spd*0.3,spd);
+        particles.push({x,y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:1, decay:rand(0.015,0.04), size:rand(sz*0.5,sz), color:col||'#ff6633'});
+    }
+}
+function updateParticles(dt){
+    for(let i=particles.length-1;i>=0;i--){
+        const p=particles[i];
+        p.x+=p.vx*dt; p.y+=p.vy*dt;
+        p.vx*=0.97; p.vy*=0.97;
+        p.life-=p.decay;
+        if(p.life<=0) particles.splice(i,1);
+    }
+}
+function renderParticles(){
+    for(const p of particles){
+        const sx=wToSx(p.x), sy=wToSy(p.y);
+        if(sx<-20||sx>canvas.width+20) continue;
+        ctx.globalAlpha = p.life*0.8;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(sx, sy, p.size*scale, 0, Math.PI*2);
+        ctx.fill();
+    }
+    ctx.globalAlpha=1;
+}
+
+// ---- Start Transit ----
+function startTransit(){
+    const f = FLAGS[game.flagIdx];
+    game.flag = f;
+    game.gameTime = 0;
+    game.encounter = { active:false, phase:'', intensity:0, result:null, timer:0, choiceIdx:-1 };
+    game.damageFlash = 0;
+    game.screenShake = 0;
+    game.iranMsg = '';
+    game.iranMsgTimer = 0;
+    player.x = 400;
+    player.y = WORLD_H/2;
+    player.vx = BASE_SPEED;
+    player.vy = 0;
+    player.hp = MAX_HP;
+    player.tollsPaid = 0;
+    player.alive = true;
+    player.angle = 0;
+    camera.x = 0;
+    particles = [];
+    generateMap();
+    game.screen = 'briefing';
+    game.briefTimer = 0;
+}
+
+// ---- Game Over ----
+function triggerGameOver(survived){
+    game.screen = 'gameOver';
+    game.survived = survived;
+    game.transitPct = clamp((player.x-300)/(MAP_W-600),0,1);
+    game.score = survived ? calcScore() : 0;
+    game.overTimer = 0;
+
+    const f = game.flag;
+    if(f.key==='iran'){
+        game.headline = pick(H_IRAN);
+        game.lastWords = '';
+    } else if(survived){
+        game.headline = pick(H_SUCCESS[f.key]||H_SUNK.generic);
+        game.lastWords = '';
+    } else {
+        const pool = (H_SUNK[f.key]||[]).concat(H_SUNK.generic);
+        game.headline = pick(pool);
+        game.lastWords = LAST_WORDS[f.key]||'';
+    }
+}
+
+// ---- Encounter Resolution ----
+function resolveChoice(choiceIdx){
+    const f = game.flag;
+    const intensity = game.encounter.intensity;
+    let dmg=0, cost=0, text='';
+
+    switch(choiceIdx){
+        case 0: // Pay toll
+            cost = f.toll * (1 + intensity*0.5);
+            text = pick(TOLL_TEXTS);
+            break;
+        case 1: { // Refuse
+            const chance = (1-f.threat)*(1-intensity*0.22);
+            if(Math.random()<chance){
+                text = REFUSE_OK[f.key]||"They grumble and leave. Bold move.";
+            } else {
+                dmg = 15+intensity*13;
+                text = pick(REFUSE_FAIL);
+            }
+            break;
+        }
+        case 2: { // Bluff
+            const chance = f.bluff*(1-intensity*0.18);
+            if(Math.random()<chance){
+                text = BLUFF_OK[f.key]||"Your bluff works. Somehow.";
+            } else {
+                dmg = 15+intensity*12;
+                text = BLUFF_FAIL[f.key]||"They see right through you. Guns follow.";
+            }
+            break;
+        }
+        case 3: { // Escort
+            const chance = f.escort*(1-intensity*0.12);
+            if(Math.random()<chance){
+                text = ESCORT_OK[f.key]||"A warship appears. The patrol retreats.";
+            } else {
+                dmg = 8+intensity*7;
+                text = pick(ESCORT_FAIL);
+            }
+            break;
+        }
+        case 4: { // Go dark
+            const chance = f.stealth*(1-intensity*0.25);
+            if(Math.random()<chance){
+                text = pick(DARK_OK);
+            } else {
+                dmg = 20+intensity*15;
+                text = pick(DARK_FAIL);
+            }
+            break;
+        }
+    }
+
+    player.tollsPaid += cost;
+    if(dmg>0){
+        player.hp = Math.max(0, player.hp-dmg);
+        game.damageFlash = 1;
+        game.screenShake = 3;
+        spawnParticles(player.x, player.y, 15, '#ff4400', 80, 3);
+    }
+
+    const costStr = cost>0 ? ' (-'+fmtMoney(cost)+')' : '';
+    const dmgStr = dmg>0 ? ' ['+dmg+' HULL DAMAGE]' : '';
+    game.encounter.result = text + costStr + dmgStr;
+    game.encounter.phase = 'result';
+    game.encounter.timer = 0;
+}
+
+// ============================================================
+//  UPDATE FUNCTIONS
+// ============================================================
+
+function updateTitle(dt){
+    game.titlePulse += dt;
+    if(keys['enter']||keys[' ']||mouseClick){
+        game.screen = 'flagSelect';
+        keys['enter']=false; keys[' ']=false; mouseClick=false;
+    }
+}
+
+function updateFlagSelect(dt){
+    if(keys['w']||keys['arrowup']){
+        game.flagIdx = (game.flagIdx-1+FLAGS.length)%FLAGS.length;
+        keys['w']=false; keys['arrowup']=false;
+    }
+    if(keys['s']||keys['arrowdown']){
+        game.flagIdx = (game.flagIdx+1)%FLAGS.length;
+        keys['s']=false; keys['arrowdown']=false;
+    }
+    if(keys['enter']||keys[' ']){
+        startTransit();
+        keys['enter']=false; keys[' ']=false;
+    }
+    // Mouse / tap on flag row
+    if(mouseClick){
+        const mob = canvas.width<600;
+        const panelW = mob ? canvas.width*0.94 : Math.min(720, canvas.width*0.9);
+        const panelH = mob ? canvas.height*0.94 : Math.min(700, canvas.height*0.92);
+        const px = (canvas.width-panelW)/2;
+        const py = (canvas.height-panelH)/2;
+        const pad = mob?10:20;
+        const headSz = mob?16:22;
+        const hdrBot = py+pad+headSz+10;
+        const rowH = mob?28:35;
+        const listTop = hdrBot+(mob?6:10);
+        const listW = mob ? panelW : panelW*0.5;
+        for(let i=0;i<FLAGS.length;i++){
+            const ry = listTop + i*rowH;
+            if(mouseX>px && mouseX<px+listW && mouseY>ry && mouseY<ry+rowH){
+                if(game.flagIdx===i){ startTransit(); }
+                else { game.flagIdx = i; }
+                break;
+            }
+        }
+        mouseClick=false;
+    }
+}
+
+function updateBriefing(dt){
+    game.briefTimer += dt;
+    if(game.briefTimer>0.5 && (keys['enter']||keys[' ']||mouseClick)){
+        game.screen = 'gameplay';
+        keys['enter']=false; keys[' ']=false; mouseClick=false;
+    }
+}
+
+function updateGameplay(dt){
+    if(!player.alive) return;
+    const f = game.flag;
+    game.gameTime += dt;
+
+    // Player movement
+    let targetVX = BASE_SPEED;
+    if(keys['d']||keys['arrowright']) targetVX += SPEED_BOOST;
+    if(keys['a']||keys['arrowleft']) targetVX -= SPEED_BRAKE;
+    targetVX = Math.max(35, targetVX);
+    player.vx += (targetVX-player.vx)*3.5*dt;
+
+    let vi = 0;
+    if(keys['w']||keys['arrowup']) vi = -1;
+    if(keys['s']||keys['arrowdown']) vi = 1;
+    // Touch steering
+    if(game.touchActive){
+        vi = clamp((game.touchY - canvas.height*0.5) / (canvas.height*0.25), -1, 1);
+        const dx = (game.touchX - canvas.width*0.5) / (canvas.width*0.25);
+        if(dx>0.2) targetVX += SPEED_BOOST * Math.min(1,dx);
+        if(dx<-0.2) targetVX -= SPEED_BRAKE * Math.min(1,-dx);
+    }
+    player.vy += vi*VERT_ACCEL*dt;
+    player.vy *= Math.max(0, 1-VERT_DRAG*dt);
+    player.vy = clamp(player.vy, -MAX_VY, MAX_VY);
+
+    player.x += player.vx*dt;
+    player.y += player.vy*dt;
+
+    // Clamp to water
+    const top = waterTop(player.x)+PLAYER_R;
+    const bot = waterBot(player.x)-PLAYER_R;
+    if(player.y < top){ player.y=top; player.vy=Math.abs(player.vy)*0.2; }
+    if(player.y > bot){ player.y=bot; player.vy=-Math.abs(player.vy)*0.2; }
+
+    // Visual angle
+    player.angle = Math.atan2(player.vy, player.vx)*0.25;
+
+    // Camera
+    camera.x = player.x - viewW*0.3;
+
+    // Wake particles
+    if(Math.random()<0.5){
+        particles.push({x:player.x-48, y:player.y-12+rand(-2,2), vx:-rand(18,35), vy:rand(-10,-4), life:1, decay:0.02, size:rand(2,3.5), color:'rgba(150,200,255,0.4)'});
+        particles.push({x:player.x-48, y:player.y+12+rand(-2,2), vx:-rand(18,35), vy:rand(4,10), life:1, decay:0.02, size:rand(2,3.5), color:'rgba(150,200,255,0.4)'});
+    }
+
+    // Collision: mines & debris
+    for(const o of obstacles){
+        if(!o.active||o.r===0) continue;
+        const d = dist(player.x, player.y, o.x, o.y);
+        if(d < PLAYER_R + o.r){
+            o.active = false;
+            player.hp = Math.max(0, player.hp - o.dmg);
+            game.damageFlash = 1;
+            game.screenShake = o.type==='mine'?4:2;
+            spawnParticles(o.x, o.y, o.type==='mine'?25:12, o.type==='mine'?'#ff4400':'#aa8855', 100, 3);
+            if(player.hp<=0){ player.alive=false; spawnParticles(player.x,player.y,40,'#ff6600',120,5); setTimeout(()=>triggerGameOver(false),1500); return; }
+        }
+    }
+
+    // Drones: spawn & update
+    for(const dr of drones){
+        if(dr.spent) continue;
+        if(!dr.spawned && Math.abs(player.x - dr.spawnX)<viewW*0.6){
+            dr.spawned = true;
+            dr.active = true;
+            dr.x = dr.spawnX + rand(-50,50);
+            dr.y = waterTop(dr.spawnX)-20;
+        }
+        if(dr.active){
+            dr.y += dr.vy*dt;
+            if(dr.y > waterBot(dr.x)+50){ dr.spent=true; dr.active=false; continue; }
+            if(dist(player.x,player.y,dr.x,dr.y)<PLAYER_R+DRONE_R){
+                dr.active=false; dr.spent=true;
+                player.hp = Math.max(0, player.hp-DRONE_DMG);
+                game.damageFlash = 1;
+                game.screenShake = 3;
+                spawnParticles(dr.x, dr.y, 18, '#ff2200', 90, 2.5);
+                if(player.hp<=0){ player.alive=false; spawnParticles(player.x,player.y,40,'#ff6600',120,5); setTimeout(()=>triggerGameOver(false),1500); return; }
+            }
+        }
+    }
+
+    // Encounter zones
+    for(const ez of encounterZones){
+        if(ez.triggered) continue;
+        if(Math.abs(player.x-ez.x)<250){
+            ez.triggered = true;
+            game.encounter.active = true;
+            game.encounter.phase = 'dialogue';
+            game.encounter.intensity = ez.intensity;
+            game.encounter.result = null;
+            game.encounter.timer = 0;
+            game.encounter.choiceIdx = -1;
+        }
+    }
+
+    // Iran easter egg messages
+    if(f.key==='iran'){
+        game.iranMsgTimer -= dt;
+        if(game.iranMsgTimer<=0){
+            const msgs = [
+                "An IRGC patrol boat waves at you. You wave back.",
+                "A decorative mine floats by with a ribbon on it.",
+                "The IRGC salutes your vessel. Nice.",
+                "A patrol boat offers you tea via radio.",
+                "You pass through sovereign waters. Nobody bothers you. This is nice.",
+                "An IRGC officer radios: 'Beautiful day for a transit, brother.'",
+            ];
+            game.iranMsg = pick(msgs);
+            game.iranMsgTimer = rand(8,15);
+        }
+    }
+
+    // Transit complete
+    if(player.x >= MAP_W - 300){
+        triggerGameOver(true);
+    }
+
+    // Particles & effects
+    updateParticles(dt);
+    game.damageFlash *= 0.93;
+    game.screenShake *= 0.82;
+}
+
+function updateEncounter(dt){
+    game.encounter.timer += dt;
+    const enc = game.encounter;
+
+    if(enc.phase==='dialogue'){
+        // Wait for choice (1-5)
+        for(let i=1;i<=5;i++){
+            if(keys[String(i)]){
+                keys[String(i)]=false;
+                resolveChoice(i-1);
+                return;
+            }
+        }
+        // Mouse / tap on choices
+        if(mouseClick && enc._choiceYs){
+            const mob = canvas.width<600;
+            const pad = mob?12:20;
+            const choiceH = mob?28:34;
+            const panelW = mob ? canvas.width*0.94 : Math.min(620, canvas.width*0.82);
+            const px = (canvas.width-panelW)/2;
+            for(let i=0;i<5;i++){
+                const cy = enc._choiceYs[i];
+                if(cy && mouseX>px+pad && mouseX<px+panelW-pad && mouseY>cy && mouseY<cy+choiceH){
+                    resolveChoice(i); mouseClick=false; return;
+                }
+            }
+            mouseClick=false;
+        }
+    }
+
+    if(enc.phase==='result'){
+        if(enc.timer>1.5 && (keys['enter']||keys[' ']||mouseClick)){
+            enc.active = false;
+            game.screen = 'gameplay';
+            keys['enter']=false; keys[' ']=false; mouseClick=false;
+            if(player.hp<=0){ player.alive=false; setTimeout(()=>triggerGameOver(false),500); }
+        }
+    }
+}
+
+function updateGameOver(dt){
+    game.overTimer += dt;
+    if(game.overTimer>1){
+        if(keys['r']){ keys['r']=false; startTransit(); }
+        if(keys['f']){ keys['f']=false; game.screen='flagSelect'; }
+        // Tap support: left half = retry, right half = change flag
+        if(mouseClick){
+            if(mouseX < canvas.width/2) startTransit();
+            else game.screen='flagSelect';
+            mouseClick=false;
+        }
+    }
+}
+
+// ============================================================
+//  RENDER FUNCTIONS
+// ============================================================
+
+function renderTitle(){
+    // Background
+    ctx.fillStyle = C_WATER;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    // Radar sweep
+    const cx=canvas.width/2, cy=canvas.height/2;
+    const rr = Math.min(canvas.width, canvas.height)*0.4;
+    const sweepAngle = game.titlePulse*0.5;
+    ctx.save();
+    ctx.translate(cx, cy);
+    for(let i=0;i<40;i++){
+        const a=sweepAngle-(i/40)*0.8;
+        const alpha=(1-i/40)*0.12;
+        ctx.strokeStyle = `rgba(51,255,136,${alpha})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0,0);
+        ctx.lineTo(Math.cos(a)*rr, Math.sin(a)*rr);
+        ctx.stroke();
+    }
+    // Rings
+    ctx.strokeStyle = 'rgba(51,255,136,0.08)';
+    ctx.lineWidth = 1;
+    for(let r=rr*0.25;r<=rr;r+=rr*0.25){
+        ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2); ctx.stroke();
+    }
+    ctx.restore();
+
+    // Dots on radar (random blips)
+    for(let i=0;i<12;i++){
+        const a=i*0.52+game.titlePulse*0.1;
+        const r2=rr*(0.2+((i*37)%100)/100*0.7);
+        const bx=cx+Math.cos(a)*r2, by=cy+Math.sin(a)*r2;
+        const alpha=0.15+Math.sin(game.titlePulse*2+i)*0.15;
+        ctx.fillStyle=`rgba(51,255,136,${alpha})`;
+        ctx.beginPath(); ctx.arc(bx,by,2.5,0,Math.PI*2); ctx.fill();
+    }
+
+    // Title
+    drawText('HORMUZ', cx, cy-55, {size:Math.min(72,canvas.width*0.08), align:'center', color:C_GREEN, bold:true, glow:20, baseline:'middle'});
+    drawText('RUN', cx, cy+15, {size:Math.min(72,canvas.width*0.08), align:'center', color:C_GREEN, bold:true, glow:20, baseline:'middle'});
+
+    // Subtitle
+    const mob = canvas.width<600;
+    drawText('Navigate. Survive. Profit.', cx, cy+65, {size:mob?12:16, align:'center', color:C_GREEN_DIM, baseline:'middle'});
+
+    // Prompt
+    if(Math.sin(game.titlePulse*3)>0){
+        drawText(mob?'TAP TO START':'PRESS ENTER', cx, canvas.height-80, {size:mob?15:18, align:'center', color:C_GREEN, glow:6, baseline:'middle'});
+    }
+
+    drawText('A Strait of Hormuz Transit Simulation', cx, canvas.height-40, {size:mob?9:11, align:'center', color:'#1a5533', baseline:'middle'});
+    drawScanlines();
+}
+
+function renderFlagSelect(){
+    ctx.fillStyle = '#050d08';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    const mob = canvas.width < 600;
+    const panelW = mob ? canvas.width*0.94 : Math.min(720, canvas.width*0.9);
+    const panelH = mob ? canvas.height*0.94 : Math.min(700, canvas.height*0.92);
+    const px = (canvas.width-panelW)/2;
+    const py = (canvas.height-panelH)/2;
+    const pad = mob ? 10 : 20;
+
+    ctx.fillStyle = C_PANEL;
+    ctx.fillRect(px,py,panelW,panelH);
+    ctx.strokeStyle = C_PANELBDR;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(px,py,panelW,panelH);
+
+    const headSz = mob ? 16 : 22;
+    drawText('SELECT YOUR FLAG', px+panelW/2, py+pad, {size:headSz, align:'center', color:C_GREEN, bold:true, glow:8});
+    ctx.strokeStyle='#1a5533'; ctx.lineWidth=1;
+    const hdrBot = py+pad+headSz+10;
+    ctx.beginPath(); ctx.moveTo(px+pad,hdrBot); ctx.lineTo(px+panelW-pad,hdrBot); ctx.stroke();
+
+    if(mob){
+        // --- MOBILE: single column ---
+        const rowH = 28, fs = 12;
+        const listTop = hdrBot+6;
+        for(let i=0;i<FLAGS.length;i++){
+            const f=FLAGS[i], ry=listTop+i*rowH, sel=i===game.flagIdx;
+            if(sel){ ctx.fillStyle='rgba(51,255,136,0.08)'; ctx.fillRect(px+4,ry,panelW-8,rowH-2); }
+            drawText((sel?'\u25B6 ':'  ')+f.code+' '+f.name, px+pad, ry+6, {size:fs, color:sel?C_GREEN:'#558866', bold:sel});
+            drawText(f.diff, px+panelW-pad, ry+6, {size:10, color:f.diffCol, align:'right'});
+        }
+        const descTop = listTop+FLAGS.length*rowH+6;
+        ctx.strokeStyle='#1a5533'; ctx.beginPath(); ctx.moveTo(px+pad,descTop); ctx.lineTo(px+panelW-pad,descTop); ctx.stroke();
+        const f=FLAGS[game.flagIdx];
+        let yy=descTop+8;
+        drawText(f.name+' \u2014 '+f.diff, px+pad, yy, {size:12, color:C_GREEN, bold:true, glow:4});
+        yy+=18;
+        yy=wrapText('"'+f.desc+'"', px+pad, yy, panelW-pad*2, 15, {size:10, color:'#88aa88'});
+        yy+=6;
+        const bw=panelW-pad*2-55;
+        [{l:'CARGO',v:f.multi/3,c:C_GOLD},{l:'THREAT',v:f.threat,c:C_RED}].forEach(st=>{
+            drawText(st.l, px+pad, yy, {size:9, color:'#557755'});
+            ctx.fillStyle='#112211'; ctx.fillRect(px+pad+50,yy+2,bw,6);
+            ctx.fillStyle=st.c; ctx.fillRect(px+pad+50,yy+2,bw*clamp(st.v,0,1),6);
+            yy+=14;
+        });
+    } else {
+        // --- DESKTOP: two column ---
+        const listW=panelW*0.5, rowH=35, listTop=hdrBot+10;
+        for(let i=0;i<FLAGS.length;i++){
+            const f=FLAGS[i], ry=listTop+i*rowH, sel=i===game.flagIdx;
+            if(sel){ ctx.fillStyle='rgba(51,255,136,0.08)'; ctx.fillRect(px+10,ry,listW,rowH-2); }
+            drawText((sel?'\u25B6 ':'  ')+f.code+'  '+f.name, px+20, ry+8, {size:15, color:sel?C_GREEN:'#558866', bold:sel});
+            drawText(f.diff, px+listW-10, ry+8, {size:12, color:f.diffCol, align:'right'});
+        }
+        ctx.strokeStyle='#1a5533';
+        ctx.beginPath(); ctx.moveTo(px+listW+10,hdrBot+5); ctx.lineTo(px+listW+10,py+panelH-55); ctx.stroke();
+        const dx=px+listW+25, dw=panelW-listW-45, f=FLAGS[game.flagIdx];
+        drawText(f.name, dx, listTop, {size:20, color:C_GREEN, bold:true, glow:6});
+        drawText('Difficulty: '+f.diff, dx, listTop+27, {size:13, color:f.diffCol});
+        let yy=wrapText('"'+f.desc+'"', dx, listTop+55, dw, 18, {size:12, color:'#88aa88'});
+        yy+=12;
+        const barW=dw-10;
+        [{l:'CARGO VALUE',v:f.multi/3,c:C_GOLD},{l:'THREAT LEVEL',v:f.threat,c:C_RED},{l:'MINE DENSITY',v:f.mines,c:'#ff6633'},{l:'ESCORT ODDS',v:f.escort,c:'#33aaff'}].forEach(st=>{
+            drawText(st.l, dx, yy, {size:10, color:'#557755'}); yy+=14;
+            ctx.fillStyle='#112211'; ctx.fillRect(dx,yy,barW,8);
+            ctx.fillStyle=st.c; ctx.fillRect(dx,yy,barW*clamp(st.v,0,1),8); yy+=16;
+        });
+    }
+
+    const footTxt = mob ? 'Tap flag \u2192 Tap again to go' : '[W/S] Navigate   [ENTER] Confirm';
+    drawText(footTxt, px+panelW/2, py+panelH-pad-10, {size:mob?10:12, align:'center', color:'#336644'});
+    drawScanlines();
+}
+
+function renderBriefing(){
+    ctx.fillStyle = '#050d08';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    const f = game.flag;
+    const mob = canvas.width<600;
+    const panelW = Math.min(550, canvas.width*(mob?0.94:0.85));
+    const px = (canvas.width-panelW)/2;
+    const cy = canvas.height/2;
+    const fs = mob?11:14;
+    const labelOff = mob?95:160;
+    const spacing = mob?22:26;
+
+    const border = '\u2550'.repeat(Math.floor(panelW/(mob?8:10)));
+    drawText(border, canvas.width/2, cy-140, {size:mob?10:14, align:'center', color:C_PANELBDR});
+    drawText('TRANSIT BRIEFING', canvas.width/2, cy-115, {size:mob?16:22, align:'center', color:C_GREEN, bold:true, glow:10});
+    drawText(border, canvas.width/2, cy-90, {size:mob?10:14, align:'center', color:C_PANELBDR});
+
+    const lines = [
+        ['FLAG:', f.code+' '+f.name],
+        ['VESSEL:', 'VLCC supertanker'],
+        ['CARGO:', mob?'2M bbl crude':'2,000,000 barrels crude oil'],
+        ['ROUTE:', mob?'Oman \u2192 Gulf':'Gulf of Oman \u2192 Persian Gulf'],
+        ['DIFF:', f.diff],
+    ];
+    let yy = cy-60;
+    for(const [label,val] of lines){
+        drawText(label, px+10, yy, {size:fs, color:'#557755'});
+        drawText(val, px+labelOff, yy, {size:fs, color:C_GREEN, bold:true});
+        yy+=spacing;
+    }
+
+    yy+=8;
+    drawText('THREAT:', px+10, yy, {size:fs, color:'#557755'});
+    const barX=px+labelOff, barW2=panelW-labelOff-10, barH=mob?10:14;
+    ctx.fillStyle='#112211'; ctx.fillRect(barX,yy,barW2,barH);
+    ctx.fillStyle = f.threat>0.6?C_RED:f.threat>0.3?C_GOLD:C_GREEN;
+    ctx.fillRect(barX,yy,barW2*f.threat,barH);
+
+    yy+=35;
+    drawText(border, canvas.width/2, yy, {size:mob?10:14, align:'center', color:C_PANELBDR});
+
+    if(Math.sin(game.time*4)>0){
+        drawText(mob?'TAP TO BEGIN':'[ENTER] BEGIN TRANSIT', canvas.width/2, yy+30, {size:mob?13:16, align:'center', color:C_GREEN, glow:6});
+    }
+    drawText(mob?'Touch to steer | Survive | Deliver':'WASD to steer  |  Survive  |  Deliver cargo', canvas.width/2, yy+60, {size:mob?9:11, align:'center', color:'#336644'});
+    drawScanlines();
+}
+
+function renderGameplay(){
+    // Water bg
+    ctx.fillStyle = C_WATER;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    // Grid
+    ctx.strokeStyle='rgba(20,60,40,0.12)';
+    ctx.lineWidth=1;
+    const gridSpace=150;
+    const startGX=Math.floor(camera.x/gridSpace)*gridSpace;
+    for(let wx=startGX;wx<camera.x+viewW;wx+=gridSpace){
+        const sx=wToSx(wx);
+        ctx.beginPath(); ctx.moveTo(sx,0); ctx.lineTo(sx,canvas.height); ctx.stroke();
+    }
+    for(let wy=0;wy<WORLD_H;wy+=gridSpace){
+        const sy=wToSy(wy);
+        ctx.beginPath(); ctx.moveTo(0,sy); ctx.lineTo(canvas.width,sy); ctx.stroke();
+    }
+
+    // Coastlines
+    renderCoastlines();
+
+    // Wrecks (scenery)
+    for(const o of obstacles){
+        if(o.type!=='wreck') continue;
+        const sx=wToSx(o.x), sy=wToSy(o.y);
+        if(sx<-100||sx>canvas.width+100) continue;
+        ctx.save();
+        ctx.translate(sx,sy);
+        ctx.rotate(o.angle);
+        ctx.fillStyle='#2a2a22';
+        ctx.fillRect(-40*scale,-10*scale,80*scale,20*scale);
+        // Broken hull detail
+        ctx.fillStyle='#222218';
+        ctx.fillRect(-35*scale,-7*scale,25*scale,14*scale);
+        ctx.fillStyle='#1a1a15';
+        ctx.fillRect(5*scale,-5*scale,20*scale,10*scale);
+        // Smoke
+        const smokeA = 0.12+Math.sin(game.time*2+o.x)*0.06;
+        ctx.fillStyle=`rgba(60,60,60,${smokeA})`;
+        ctx.beginPath(); ctx.arc(-5*scale,-18*scale,12*scale,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle=`rgba(50,50,50,${smokeA*0.6})`;
+        ctx.beginPath(); ctx.arc(5*scale,-24*scale,8*scale,0,Math.PI*2); ctx.fill();
+        ctx.restore();
+        // Name label
+        drawText(o.name, sx, sy-20*scale, {size:9, color:'#443322', align:'center'});
+    }
+
+    // Mines — pulse in and out of visibility
+    for(const o of obstacles){
+        if(o.type!=='mine'||!o.active) continue;
+        const sx=wToSx(o.x), sy=wToSy(o.y);
+        if(sx<-50||sx>canvas.width+50) continue;
+
+        // Visibility cycle: visible ~1.4s out of every 5s, per-mine phase offset
+        const cycleT = 5.0;
+        const onT = 1.4;
+        const fadeT = 0.3;
+        const t = ((game.time + o.phase) % cycleT);
+        let mAlpha;
+        if(t < fadeT) mAlpha = t/fadeT;
+        else if(t < onT - fadeT) mAlpha = 1;
+        else if(t < onT) mAlpha = (onT - t)/fadeT;
+        else mAlpha = 0;
+
+        if(mAlpha < 0.01){ continue; }
+
+        ctx.save();
+        ctx.globalAlpha = mAlpha;
+        // Glow
+        const grad=ctx.createRadialGradient(sx,sy,0,sx,sy,o.r*3.5*scale);
+        grad.addColorStop(0,'rgba(255,60,30,0.3)');
+        grad.addColorStop(1,'rgba(255,60,30,0)');
+        ctx.fillStyle=grad;
+        ctx.beginPath(); ctx.arc(sx,sy,o.r*3.5*scale,0,Math.PI*2); ctx.fill();
+        // Body
+        ctx.fillStyle='#555';
+        ctx.beginPath(); ctx.arc(sx,sy,o.r*scale,0,Math.PI*2); ctx.fill();
+        // Spikes
+        ctx.strokeStyle='#777'; ctx.lineWidth=1.5*scale;
+        for(let i=0;i<8;i++){
+            const a=(i/8)*Math.PI*2+game.time*0.5;
+            ctx.beginPath();
+            ctx.moveTo(sx+Math.cos(a)*o.r*scale, sy+Math.sin(a)*o.r*scale);
+            ctx.lineTo(sx+Math.cos(a)*(o.r+5)*scale, sy+Math.sin(a)*(o.r+5)*scale);
+            ctx.stroke();
+        }
+        // Pulsing center light
+        const pulse=Math.sin(game.time*5+o.x)*0.4+0.6;
+        ctx.fillStyle=`rgba(255,30,0,${pulse})`;
+        ctx.beginPath(); ctx.arc(sx,sy,2.5*scale,0,Math.PI*2); ctx.fill();
+        ctx.restore();
+    }
+
+    // Debris
+    for(const o of obstacles){
+        if(o.type!=='debris'||!o.active) continue;
+        const sx=wToSx(o.x), sy=wToSy(o.y);
+        if(sx<-60||sx>canvas.width+60) continue;
+        ctx.save();
+        ctx.translate(sx,sy);
+        ctx.rotate(o.angle+Math.sin(game.time*0.3+o.x*0.01)*0.1);
+        ctx.fillStyle='#3a3025';
+        ctx.fillRect(-o.r*scale,-o.r*0.5*scale,o.r*2*scale,o.r*scale);
+        ctx.strokeStyle='#4a4030'; ctx.lineWidth=1;
+        ctx.strokeRect(-o.r*scale,-o.r*0.5*scale,o.r*2*scale,o.r*scale);
+        ctx.restore();
+    }
+
+    // Drones
+    for(const dr of drones){
+        if(!dr.active) continue;
+        const sx=wToSx(dr.x), sy=wToSy(dr.y);
+        if(sx<-50||sx>canvas.width+50) continue;
+        ctx.save();
+        ctx.translate(sx,sy);
+        ctx.rotate(Math.PI/2); // pointing down
+        const ds=scale*1.2;
+        ctx.fillStyle='#cc3333';
+        ctx.beginPath();
+        ctx.moveTo(8*ds,0);
+        ctx.lineTo(-6*ds,-6*ds);
+        ctx.lineTo(-3*ds,0);
+        ctx.lineTo(-6*ds,6*ds);
+        ctx.closePath();
+        ctx.fill();
+        // Blinking
+        if(Math.sin(game.time*15+dr.x)>0){
+            ctx.fillStyle='#ff0000';
+            ctx.beginPath(); ctx.arc(0,0,2*ds,0,Math.PI*2); ctx.fill();
+        }
+        ctx.restore();
+        // Warning indicator if near top of screen
+        if(sy<50*scale){
+            ctx.fillStyle='rgba(255,50,50,0.6)';
+            ctx.beginPath(); ctx.moveTo(sx,10); ctx.lineTo(sx-6,22); ctx.lineTo(sx+6,22); ctx.closePath(); ctx.fill();
+        }
+    }
+
+    // Particles
+    renderParticles();
+
+    // Player tanker (scaled up ~1.7x)
+    if(player.alive){
+        const sx=wToSx(player.x), sy=wToSy(player.y);
+        ctx.save();
+        ctx.translate(sx,sy);
+        ctx.rotate(player.angle);
+        const s=scale;
+        // Hull
+        ctx.fillStyle='#667788';
+        ctx.beginPath();
+        ctx.moveTo(54*s, 0);
+        ctx.lineTo(40*s, -14*s);
+        ctx.lineTo(-46*s, -13*s);
+        ctx.lineTo(-50*s, 0);
+        ctx.lineTo(-46*s, 13*s);
+        ctx.lineTo(40*s, 14*s);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle='#8899aa'; ctx.lineWidth=1.5;
+        ctx.stroke();
+        // Deck plating
+        ctx.fillStyle='#556677';
+        ctx.fillRect(-24*s,-8*s,50*s,16*s);
+        // Cargo tanks (deck detail)
+        ctx.fillStyle='#5a6a7a';
+        for(let i=0;i<4;i++){
+            ctx.beginPath(); ctx.arc((-10+i*12)*s, 0, 4.5*s, 0, Math.PI*2); ctx.fill();
+        }
+        // Bridge superstructure
+        ctx.fillStyle='#7799aa';
+        ctx.fillRect(-44*s,-8*s,16*s,16*s);
+        ctx.fillStyle='#88aabb';
+        ctx.fillRect(-42*s,-5*s,10*s,10*s);
+        // Funnel
+        ctx.fillStyle='#556';
+        ctx.fillRect(-38*s,-11*s,5*s,4*s);
+        // Flag indicator dot
+        ctx.fillStyle = game.flag.diffCol;
+        ctx.beginPath(); ctx.arc(-47*s, 0, 3*s, 0, Math.PI*2); ctx.fill();
+        ctx.restore();
+    }
+
+    // Screen shake
+    if(game.screenShake>0.5){
+        // Already applied via transform, but let's handle in the main render call
+    }
+
+    // Damage flash
+    if(game.damageFlash>0.01){
+        ctx.fillStyle=`rgba(255,0,0,${game.damageFlash*0.3})`;
+        ctx.fillRect(0,0,canvas.width,canvas.height);
+    }
+
+    // HUD
+    renderHUD();
+
+    // Iran flavor text
+    if(game.flag.key==='iran' && game.iranMsg){
+        const alpha = Math.min(1, game.iranMsgTimer/2);
+        drawText(game.iranMsg, canvas.width/2, canvas.height-70, {size:14, align:'center', color:`rgba(170,102,255,${alpha})`, glow:4});
+    }
+
+    drawScanlines();
+}
+
+function renderCoastlines(){
+    const step = 8; // world units per segment
+    const x0 = Math.max(0, Math.floor(camera.x/step)*step);
+    const x1 = Math.min(MAP_W, Math.ceil((camera.x+viewW)/step)*step);
+
+    // Iran coast (top)
+    ctx.fillStyle = C_LAND;
+    ctx.beginPath();
+    ctx.moveTo(wToSx(x0), 0);
+    for(let wx=x0;wx<=x1;wx+=step){
+        ctx.lineTo(wToSx(wx), wToSy(iranCoastY(wx)));
+    }
+    ctx.lineTo(wToSx(x1), 0);
+    ctx.closePath();
+    ctx.fill();
+
+    // Iran coast edge
+    ctx.strokeStyle = C_LAND_EDGE;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for(let wx=x0;wx<=x1;wx+=step){
+        const sx=wToSx(wx), sy=wToSy(iranCoastY(wx));
+        wx===x0?ctx.moveTo(sx,sy):ctx.lineTo(sx,sy);
+    }
+    ctx.stroke();
+
+    // Qeshm Island
+    const qStart=Math.max(4500,x0), qEnd=Math.min(7800,x1);
+    if(qEnd>qStart){
+        ctx.fillStyle = C_LAND;
+        ctx.beginPath();
+        ctx.moveTo(wToSx(qStart), wToSy(iranCoastY(qStart)));
+        for(let wx=qStart;wx<=qEnd;wx+=step){
+            ctx.lineTo(wToSx(wx), wToSy(qeshmY(wx)));
+        }
+        for(let wx=qEnd;wx>=qStart;wx-=step){
+            ctx.lineTo(wToSx(wx), wToSy(iranCoastY(wx)));
+        }
+        ctx.closePath();
+        ctx.fill();
+        // Edge
+        ctx.strokeStyle = C_LAND_EDGE;
+        ctx.beginPath();
+        for(let wx=qStart;wx<=qEnd;wx+=step){
+            const sx=wToSx(wx), sy=wToSy(qeshmY(wx));
+            wx===qStart?ctx.moveTo(sx,sy):ctx.lineTo(sx,sy);
+        }
+        ctx.stroke();
+        // Label
+        const qMid=6150, sqx=wToSx(qMid);
+        if(sqx>0&&sqx<canvas.width){
+            drawText('QESHM ISLAND', sqx, wToSy(iranCoastY(qMid)+45), {size:9, color:'#2a5a3a', align:'center'});
+        }
+    }
+
+    // Oman coast (bottom)
+    ctx.fillStyle = C_LAND;
+    ctx.beginPath();
+    ctx.moveTo(wToSx(x0), canvas.height);
+    for(let wx=x0;wx<=x1;wx+=step){
+        ctx.lineTo(wToSx(wx), wToSy(omanCoastY(wx)));
+    }
+    ctx.lineTo(wToSx(x1), canvas.height);
+    ctx.closePath();
+    ctx.fill();
+
+    // Oman coast edge
+    ctx.strokeStyle = C_LAND_EDGE;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for(let wx=x0;wx<=x1;wx+=step){
+        const sx=wToSx(wx), sy=wToSy(omanCoastY(wx));
+        wx===x0?ctx.moveTo(sx,sy):ctx.lineTo(sx,sy);
+    }
+    ctx.stroke();
+
+    // Islets — small rocky islands
+    for(const il of islets){
+        const sx=wToSx(il.x), sy=wToSy(il.y);
+        if(sx<-80||sx>canvas.width+80) continue;
+        ctx.fillStyle = C_LAND;
+        ctx.beginPath();
+        for(let i=0;i<il.pts.length;i++){
+            const px=sx+il.pts[i].dx*scale, py=sy+il.pts[i].dy*scale;
+            i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = C_LAND_EDGE;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        // Shallow water ring around islet
+        ctx.strokeStyle = 'rgba(26,64,48,0.2)';
+        ctx.lineWidth = 3*scale;
+        ctx.beginPath();
+        for(let i=0;i<il.pts.length;i++){
+            const px=sx+il.pts[i].dx*scale*1.5, py=sy+il.pts[i].dy*scale*1.5;
+            i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+        }
+        ctx.closePath();
+        ctx.stroke();
+    }
+
+    // Docks / piers extending from coast
+    for(const dk of docks){
+        const sx=wToSx(dk.x);
+        if(sx<-100||sx>canvas.width+100) continue;
+        const sy=wToSy(dk.coastY);
+        const dirPx = dk.dir * dk.len * scale;
+        const w = dk.width * scale;
+        // Main pier arm
+        ctx.fillStyle = '#2a1f14';
+        ctx.fillRect(sx-w/2, sy, w, dirPx);
+        ctx.strokeStyle = '#40301a';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(sx-w/2, sy, w, dirPx);
+        // Cross-beams / secondary piers
+        for(let p=0;p<dk.piers;p++){
+            const offset = (p - (dk.piers-1)/2) * 18 * scale;
+            const beamLen = rand(12,22)*scale;
+            const beamY = sy + dirPx * rand(0.5,0.95);
+            ctx.fillStyle = '#2a1f14';
+            ctx.fillRect(sx+offset-beamLen/2, beamY-w*0.3, beamLen, w*0.6);
+        }
+        // Pilings (small dots at end)
+        ctx.fillStyle = '#40301a';
+        ctx.beginPath(); ctx.arc(sx, sy+dirPx, 3*scale, 0, Math.PI*2); ctx.fill();
+    }
+
+    // Coast labels
+    const labelX = camera.x + viewW*0.5;
+    const irSy = wToSy(iranCoastY(labelX)*0.35);
+    const omSy = wToSy(omanCoastY(labelX)+(WORLD_H-omanCoastY(labelX))*0.5);
+    drawText('I R A N', wToSx(labelX), Math.max(15, irSy), {size:13, color:'#1a4030', align:'center', bold:true});
+    drawText('O M A N / U A E', wToSx(labelX), Math.min(canvas.height-15, omSy), {size:13, color:'#1a4030', align:'center', bold:true});
+}
+
+function renderHUD(){
+    const f = game.flag;
+    const mob = canvas.width<600;
+    const pad = mob?8:15;
+
+    // Flag
+    drawText(f.code+' '+f.name, pad, pad, {size:mob?11:14, color:f.diffCol, bold:true, glow:4});
+    if(!mob) drawText(f.diff, pad, pad+20, {size:11, color:f.diffCol});
+
+    // Cargo value
+    const cargo = calcScore();
+    drawText('CARGO', pad, pad+(mob?16:46), {size:mob?8:10, color:'#557755'});
+    drawText(fmtMoney(cargo), pad, pad+(mob?26:60), {size:mob?14:18, color:C_GOLD, bold:true, glow:4});
+
+    if(player.tollsPaid>0){
+        drawText('-'+fmtMoney(player.tollsPaid), pad, pad+(mob?42:85), {size:mob?9:11, color:'#aa5533'});
+    }
+
+    // Hull integrity
+    const hullPct = player.hp/MAX_HP;
+    const hullCol = hullPct>0.6?C_GREEN:hullPct>0.3?C_GOLD:C_RED;
+    const hullFlash = hullPct<0.15 && Math.sin(game.time*8)>0;
+    drawText(mob?'HULL':'HULL INTEGRITY', canvas.width-pad, pad, {size:mob?8:10, color:'#557755', align:'right'});
+    const barW = mob?Math.min(110,canvas.width*0.28):180, barH=mob?10:14;
+    const barX=canvas.width-pad-barW, barY=pad+(mob?12:16);
+    ctx.fillStyle='#112211'; ctx.fillRect(barX,barY,barW,barH);
+    ctx.fillStyle = hullFlash?'#ff0000':hullCol;
+    ctx.fillRect(barX,barY,barW*hullPct,barH);
+    ctx.strokeStyle='#336633'; ctx.lineWidth=1;
+    ctx.strokeRect(barX,barY,barW,barH);
+    drawText(Math.round(hullPct*100)+'%', canvas.width-pad, barY+(mob?-1:1), {size:mob?9:11, color:hullCol, align:'right', bold:true});
+
+    // Progress bar
+    const pct = clamp((player.x-300)/(MAP_W-600),0,1);
+    const pBarW = canvas.width*(mob?0.55:0.5);
+    const pBarX = (canvas.width-pBarW)/2;
+    const pBarY = canvas.height-(mob?26:35);
+    const pBarH = mob?7:10;
+    drawText(mob?'TRANSIT':'STRAIT TRANSIT', canvas.width/2, pBarY-(mob?12:16), {size:mob?8:10, color:'#557755', align:'center'});
+    ctx.fillStyle='#112211'; ctx.fillRect(pBarX,pBarY,pBarW,pBarH);
+    ctx.fillStyle=C_GREEN; ctx.fillRect(pBarX,pBarY,pBarW*pct,pBarH);
+    ctx.strokeStyle='#336633'; ctx.lineWidth=1; ctx.strokeRect(pBarX,pBarY,pBarW,pBarH);
+    ctx.fillStyle='#fff'; ctx.beginPath();
+    const mx=pBarX+pBarW*pct;
+    ctx.moveTo(mx,pBarY-2); ctx.lineTo(mx-3,pBarY-6); ctx.lineTo(mx+3,pBarY-6); ctx.closePath(); ctx.fill();
+    drawText(Math.round(pct*100)+'%', canvas.width/2, pBarY+pBarH+3, {size:mob?9:11, color:C_GREEN, align:'center'});
+
+    if(!mob) drawText('DIST: '+Math.round(player.x)+' / '+(MAP_W-300), canvas.width-pad, canvas.height-35, {size:10, color:'#336633', align:'right'});
+    const mins=Math.floor(game.gameTime/60), secs=Math.floor(game.gameTime%60);
+    drawText(String(mins).padStart(2,'0')+':'+String(secs).padStart(2,'0'), canvas.width-pad, canvas.height-(mob?10:20), {size:mob?9:11, color:'#557755', align:'right'});
+}
+
+function renderEncounter(){
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    const enc = game.encounter;
+    const mob = canvas.width<600;
+    const fs = mob?11:13;
+    const fsH = mob?11:14;
+    const lineH = fs+5;
+    const choiceH = mob?28:34;
+    const pad = mob?12:20;
+    const panelW = mob ? canvas.width*0.94 : Math.min(620, canvas.width*0.82);
+    const textW = panelW-pad*2;
+
+    // Pre-calc height
+    const hail = HAILS[enc.intensity]||HAILS[0];
+    ctx.font = fs+'px '+FONT;
+    let needH = fsH+30; // header
+    for(const line of hail){ needH += Math.ceil(ctx.measureText('IRGC: '+line).width/textW)*lineH+2; }
+    if(enc.phase==='dialogue') needH += 10+5*choiceH+10;
+    if(enc.phase==='result') needH += 100;
+    needH += 35;
+    const panelH = Math.min(Math.max(needH,200), canvas.height*0.92);
+    const px = (canvas.width-panelW)/2;
+    const py = (canvas.height-panelH)/2;
+
+    ctx.fillStyle = 'rgba(5,12,5,0.95)';
+    ctx.fillRect(px,py,panelW,panelH);
+    ctx.strokeStyle = enc.intensity>=2?C_RED:enc.intensity>=1?C_GOLD:C_GREEN;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(px,py,panelW,panelH);
+
+    const hdrCol = enc.intensity>=2?C_RED:enc.intensity>=1?C_GOLD:C_GREEN;
+    const hdrText = enc.intensity>=2?'\u2588 HOSTILE \u2588':enc.intensity>=1?'\u2593 WARNING \u2593':'\u2591 INCOMING TRANSMISSION \u2591';
+    drawText(hdrText, px+panelW/2, py+10, {size:fsH, align:'center', color:hdrCol, bold:true, glow:6});
+
+    // Hail — wrapped
+    let yy = py+10+fsH+14;
+    for(const line of hail){
+        yy = wrapText('IRGC: '+line, px+pad, yy, textW, lineH, {size:fs, color:'#cc8833'});
+        yy+=2;
+    }
+
+    if(enc.phase==='dialogue'){
+        yy+=6;
+        const choices = mob ? [
+            '[1] PAY TOLL ('+fmtMoney(game.flag.toll*(1+enc.intensity*0.5))+')',
+            '[2] REFUSE \u2014 Deny passage.',
+            '[3] BLUFF \u2014 Fake identity.',
+            '[4] ESCORT \u2014 Call navy.',
+            '[5] GO DARK \u2014 Cut transponder.',
+        ] : [
+            '[1] PAY TOLL  ('+fmtMoney(game.flag.toll*(1+enc.intensity*0.5))+')',
+            '[2] REFUSE  \u2014 Deny passage. Pray.',
+            '[3] BLUFF  \u2014 Fake your identity.',
+            '[4] RADIO FOR ESCORT  \u2014 Call the navy.',
+            '[5] GO DARK  \u2014 Cut transponder.',
+        ];
+        enc._choiceYs = [];
+        for(let i=0;i<choices.length;i++){
+            enc._choiceYs.push(yy);
+            const hover = mouseX>px+pad&&mouseX<px+panelW-pad&&mouseY>yy&&mouseY<yy+choiceH-2;
+            if(hover){ ctx.fillStyle='rgba(51,255,136,0.06)'; ctx.fillRect(px+pad,yy,panelW-pad*2,choiceH-2); }
+            drawText(choices[i], px+pad+4, yy+Math.floor(choiceH/4), {size:fs, color:hover?'#aaffcc':C_GREEN});
+            yy+=choiceH;
+        }
+    }
+
+    if(enc.phase==='result' && enc.result){
+        yy+=6;
+        ctx.strokeStyle='#1a5533'; ctx.lineWidth=1;
+        ctx.beginPath(); ctx.moveTo(px+pad,yy); ctx.lineTo(px+panelW-pad,yy); ctx.stroke();
+        yy+=10;
+        wrapText(enc.result, px+pad, yy, textW, lineH+3, {size:fs, color:'#ccccaa'});
+        if(enc.timer>1.5 && Math.sin(game.time*4)>0){
+            drawText(mob?'Tap to continue':'[ENTER] Continue transit', px+panelW/2, py+panelH-20, {size:mob?10:12, align:'center', color:C_GREEN_DIM});
+        }
+    }
+}
+
+function renderGameOver(){
+    ctx.fillStyle='#040804';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    const f = game.flag;
+    const mob = canvas.width<600;
+    const panelW = mob ? canvas.width*0.94 : Math.min(650, canvas.width*0.88);
+    const px = (canvas.width-panelW)/2;
+    const pad = mob?10:15;
+    const fadeIn = clamp(game.overTimer/1.5, 0, 1);
+    const fsBody = mob?10:13;
+    const fsStat = mob?10:12;
+    const lineS = mob?18:22;
+
+    ctx.globalAlpha = fadeIn;
+
+    const border = '\u2550'.repeat(Math.floor(panelW/(mob?8:10)));
+    let yy = mob?20:50;
+    drawText(border, canvas.width/2, yy, {size:mob?10:14, align:'center', color:C_PANELBDR});
+    yy+=mob?18:25;
+    drawText('THE HORMUZ TIMES', canvas.width/2, yy, {size:mob?16:24, align:'center', color:C_GREEN, bold:true, glow:10});
+    yy+=mob?15:22;
+    drawText('"All the news that\'s fit to transmit"', canvas.width/2, yy, {size:mob?8:10, align:'center', color:'#336633'});
+    yy+=mob?12:20;
+    drawText(border, canvas.width/2, yy, {size:mob?10:14, align:'center', color:C_PANELBDR});
+    yy+=mob?16:30;
+
+    yy = wrapText(game.headline, px+pad, yy, panelW-pad*2, mob?20:28, {size:mob?14:20, color:'#eeddaa', bold:true, glow:3});
+    yy+=mob?8:15;
+
+    ctx.strokeStyle='#1a5533'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(px,yy); ctx.lineTo(px+panelW,yy); ctx.stroke();
+    yy+=mob?12:20;
+
+    if(game.survived || f.key==='iran'){
+        drawText('FINAL SCORE', canvas.width/2, yy, {size:mob?14:18, align:'center', color:C_GOLD, bold:true, glow:6});
+        yy+=mob?22:28;
+        drawText(fmtMoney(game.score), canvas.width/2, yy, {size:mob?24:32, align:'center', color:game.score>0?C_GOLD:'#aa66ff', bold:true, glow:10});
+        yy+=mob?32:45;
+
+        if(f.key==='iran'){
+            drawText('You sailed freely. No one stopped you.', canvas.width/2, yy, {size:fsBody, align:'center', color:'#aa66ff'});
+            yy+=mob?16:20;
+            drawText('No one bought your oil either.', canvas.width/2, yy, {size:fsBody, align:'center', color:'#aa66ff'});
+            yy+=mob?20:30;
+        } else {
+            const pct = game.transitPct;
+            const base = CARGO_BASE*pct;
+            const stats = [
+                [mob?'Cargo:':'Cargo Delivered:', fmtMoney(base), C_GREEN],
+                [mob?'Flag:':'Flag Multiplier:', '\u00d7'+f.multi.toFixed(1)+' ('+f.name+')', f.diffCol],
+                ['Tolls:', player.tollsPaid>0?'-'+fmtMoney(player.tollsPaid):'$0', player.tollsPaid>0?'#aa5533':C_GREEN],
+                ['Damage:', '-'+fmtMoney(((MAX_HP-player.hp)/MAX_HP)*REPAIR_MAX), player.hp<MAX_HP?'#aa5533':C_GREEN],
+                ['Hull:', Math.round(player.hp)+'%', player.hp>60?C_GREEN:player.hp>30?C_GOLD:C_RED],
+            ];
+            if(player.hp===MAX_HP) stats.push(['Clean Run:', '\u00d71.5', C_GOLD]);
+            if(game.gameTime<120) stats.push(['Speed:', '\u00d71.3', C_GOLD]);
+            else if(game.gameTime<180) stats.push(['Speed:', '\u00d71.1', C_GOLD]);
+
+            for(const [label,val,col] of stats){
+                drawText(label, px+pad+5, yy, {size:fsStat, color:'#668866'});
+                drawText(val, px+panelW-pad-5, yy, {size:fsStat, color:col, align:'right'});
+                yy+=lineS;
+            }
+            yy+=mob?6:10;
+        }
+    } else {
+        drawText('FINAL SCORE: $0', canvas.width/2, yy, {size:mob?16:22, align:'center', color:C_RED, bold:true, glow:6});
+        yy+=mob?25:35;
+        drawText('Transit: '+Math.round(game.transitPct*100)+'%', canvas.width/2, yy, {size:fsBody, align:'center', color:'#886666'});
+        yy+=mob?16:22;
+        if(game.lastWords){
+            wrapText('"'+game.lastWords+'"', px+pad, yy, panelW-pad*2, mob?16:20, {size:fsBody, color:'#aa8866', align:'center'});
+            yy+=mob?20:30;
+        }
+        drawText('"Should\'ve picked China."', canvas.width/2, yy, {size:mob?10:12, align:'center', color:'#555'});
+        yy+=mob?16:25;
+    }
+
+    ctx.strokeStyle='#1a5533';
+    ctx.beginPath(); ctx.moveTo(px,yy); ctx.lineTo(px+panelW,yy); ctx.stroke();
+    yy+=mob?16:25;
+
+    if(game.overTimer>1){
+        const txt = mob ? '\u25C0 Tap left: Again    Tap right: Flags \u25B6' : '[R] Try Again   [F] Change Flag';
+        drawText(txt, canvas.width/2, yy, {size:mob?11:14, align:'center', color:C_GREEN, glow:4});
+    }
+
+    ctx.globalAlpha=1;
+    drawScanlines();
+}
+
+function drawScanlines(){
+    ctx.fillStyle='rgba(0,0,0,0.04)';
+    for(let y=0;y<canvas.height;y+=3){
+        ctx.fillRect(0,y,canvas.width,1);
+    }
+    // Vignette
+    const grad=ctx.createRadialGradient(canvas.width/2,canvas.height/2,canvas.height*0.3,canvas.width/2,canvas.height/2,canvas.height*0.9);
+    grad.addColorStop(0,'rgba(0,0,0,0)');
+    grad.addColorStop(1,'rgba(0,0,0,0.35)');
+    ctx.fillStyle=grad;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+}
+
+// ============================================================
+//  MAIN LOOP
+// ============================================================
+
+function update(dt){
+    game.time += dt;
+    switch(game.screen){
+        case 'title': updateTitle(dt); break;
+        case 'flagSelect': updateFlagSelect(dt); break;
+        case 'briefing': updateBriefing(dt); break;
+        case 'gameplay':
+            if(game.encounter.active){
+                updateEncounter(dt);
+            } else {
+                updateGameplay(dt);
+            }
+            break;
+        case 'gameOver': updateGameOver(dt); break;
+    }
+    mouseClick = false;
+}
+
+function render(){
+    ctx.save();
+    // Screen shake
+    if(game.screenShake>0.5){
+        ctx.translate((Math.random()-0.5)*game.screenShake, (Math.random()-0.5)*game.screenShake);
+    }
+    switch(game.screen){
+        case 'title': renderTitle(); break;
+        case 'flagSelect': renderFlagSelect(); break;
+        case 'briefing': renderBriefing(); break;
+        case 'gameplay':
+            renderGameplay();
+            if(game.encounter.active) renderEncounter();
+            break;
+        case 'gameOver': renderGameOver(); break;
+    }
+    ctx.restore();
+}
+
+let lastTime = performance.now();
+function loop(time){
+    const dt = Math.min((time-lastTime)/1000, 0.05);
+    lastTime = time;
+    update(dt);
+    render();
+    requestAnimationFrame(loop);
+}
+
+// ---- Init ----
+initGame();
+requestAnimationFrame(loop);
+
+</script>
+</body>
+</html>

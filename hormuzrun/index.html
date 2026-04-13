@@ -97,16 +97,20 @@ canvas{display:block;cursor:crosshair;image-rendering:auto;position:fixed;top:0;
     display:none;
     flex-direction:column;
     align-items:center;
-    gap:16px;
+    justify-content:space-between;
     z-index:2;
     text-align:center;
     padding:0 20px;
+    position:absolute;
+    top:0; left:0; width:100%; height:100%;
+    box-sizing:border-box;
+    padding:max(40px,8vh) 20px max(30px,5vh);
 }
 #fs-prompt .title {
     color:#33ff88;
-    font-size:clamp(32px, 8vw, 56px);
+    font-size:clamp(40px, 10vw, 64px);
     font-weight:bold;
-    letter-spacing:clamp(4px, 1.5vw, 10px);
+    letter-spacing:clamp(6px, 2vw, 14px);
     text-shadow: 0 0 30px rgba(51,255,136,0.5), 0 0 60px rgba(51,255,136,0.2);
     line-height:1.1;
 }
@@ -114,6 +118,19 @@ canvas{display:block;cursor:crosshair;image-rendering:auto;position:fixed;top:0;
     color:#557755;
     font-size:clamp(10px, 2.5vw, 14px);
     letter-spacing:3px;
+    margin-top:8px;
+}
+#fs-prompt .middle {
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:20px;
+}
+#fs-prompt .bottom {
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:4px;
 }
 #fs-btn {
     background:none;
@@ -167,12 +184,18 @@ canvas{display:block;cursor:crosshair;image-rendering:auto;position:fixed;top:0;
     </div>
     <div id="fs-rotate"></div>
     <div id="fs-prompt">
-        <div class="title">HORMUZ RUN</div>
-        <div class="sub">// A Strait of Hormuz Transit Simulation</div>
-        <button id="fs-btn">&#9654; ENTER GAME</button>
-        <div class="hint">Fullscreen recommended for optimal experience</div>
-        <div class="hint" style="margin-top:24px;opacity:0.4">&copy; 2026 Eli Schwimmer</div>
-        <div class="hint" style="opacity:0.3;margin-top:2px">Kneidels of Steel Technologies</div>
+        <div class="top">
+            <div class="title">HORMUZ RUN</div>
+            <div class="sub">// A Strait of Hormuz Transit Simulation</div>
+        </div>
+        <div class="middle">
+            <button id="fs-btn">&#9654; ENTER GAME</button>
+            <div class="hint">Fullscreen recommended for optimal experience</div>
+        </div>
+        <div class="bottom">
+            <div class="hint" style="opacity:0.4">&copy; 2026 Eli Schwimmer</div>
+            <div class="hint" style="opacity:0.3">Kneidels of Steel Technologies</div>
+        </div>
     </div>
 </div>
 

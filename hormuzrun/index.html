@@ -161,7 +161,7 @@ const SFX = {
     playMusic() {
         if (!this.musicEl) return;
         this.musicEl.volume = this.musicVol;
-        this.musicEl.play().catch(e => console.log('Music play error:', e));
+        if (this.musicEl.paused) { this.musicEl.play().catch(e => console.log('Music play error:', e)); }
     },
     stopMusic() {
         if (!this.musicEl) return;
@@ -740,6 +740,7 @@ function initGame() {
 
 // ---- Input ----
 window.addEventListener('keydown', e => {
+    initDesktopAudio();
     keys[e.key.toLowerCase()] = true;
     keys['_last'] = e.key.toLowerCase();
     if(e.key === ' ') e.preventDefault();
@@ -747,6 +748,7 @@ window.addEventListener('keydown', e => {
 window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 window.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
 window.addEventListener('click', e => {
+    initDesktopAudio();
     mouseClick = true; mouseX = e.clientX; mouseY = e.clientY;
     if (typeof tryFullscreen === 'function' && game && game.screen === 'title') tryFullscreen();
 });
@@ -1167,12 +1169,22 @@ function tryFullscreen() {
 }
 
 let desktopAudioInit = false;
+
+function initDesktopAudio() {
+    if (!desktopAudioInit) {
+        SFX.init();
+        SFX.resume();
+        SFX.playMusic();
+        desktopAudioInit = true;
+    }
+}
+
 function updateTitle(dt){
     game.titlePulse += dt;
     if (game.screen === 'title' && Math.sin(game.titlePulse*3)>0 && Math.sin((game.titlePulse-dt)*3)<=0) { SFX.ping(); }
     if(keys['enter']||keys[' ']||mouseClick){
         // fullscreen is triggered from the event handler, not here
-        if (!desktopAudioInit) { SFX.init(); SFX.resume(); SFX.playMusic(); desktopAudioInit = true; }
+        
         SFX.blip();
         game.screen = 'flagSelect';
         keys['enter']=false; keys[' ']=false; mouseClick=false;
@@ -2391,6 +2403,7 @@ fsBtn.addEventListener('click', function() {
     SFX.init();
     SFX.resume();
     SFX.playMusic();
+    desktopAudioInit = true;
     // Request fullscreen from this genuine user gesture
     const el = document.documentElement;
     const rfs = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
